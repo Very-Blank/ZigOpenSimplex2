@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const GRADIENTS2: [8 * 8]i64 = .{
+const GRADIENTS2: [16]i64 = .{
     5,  2,  2,  5,
     -5, 2,  -2, 5,
     5,  -2, 2,  -5,

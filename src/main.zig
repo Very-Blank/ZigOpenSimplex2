@@ -1,8 +1,4 @@
-const std = @import("std");
-
-// K.jpg's OpenSimplex 2, faster variant
-
-const PRIME_X: i64 = 0x5205402B9270C86F;
+//K.jpg's OpenSimplex 2, faster variant
 const PRIME_Y: i64 = 0x598CD327003817B5;
 const PRIME_Z: i64 = 0x5BCC226E9FA0BACB;
 const PRIME_W: i64 = 0x56CC5227E58F554B;
@@ -40,12 +36,11 @@ const RSQUARED_4D: f32 = 0.6;
 // Noise Evaluators
 
 // 2D Simplex noise, standard lattice orientation.
-
 pub fn noise2(seed: i64, x: f64, y: f64) f32 {
     // Get points for A2* lattice
-    const s = SKEW_2D * (x + y);
-    const xs = x + s;
-    const ys = y + s;
+    const s : f64 = SKEW_2D * (x + y);
+    const xs : f64 = x + s;
+    const ys : f64 = y + s;
 
     return noise2_UnskewedBase(seed, xs, ys);
 }
@@ -58,8 +53,8 @@ pub fn noise2(seed: i64, x: f64, y: f64) f32 {
 
 pub fn noise2_ImproveX(seed: i64, x: f64, y: f64) f32 {
     // Skew transform and rotation baked into one.
-    const xx = x * ROOT2OVER2;
-    const yy = y * (ROOT2OVER2 * (1.0 + 2.0 * SKEW_2D));
+    const xx : f64 = x * ROOT2OVER2;
+    const yy : f64 = y * (ROOT2OVER2 * (1.0 + 2.0 * SKEW_2D));
 
     return noise2_UnskewedBase(seed, yy + xx, yy - xx);
 }
@@ -67,36 +62,38 @@ pub fn noise2_ImproveX(seed: i64, x: f64, y: f64) f32 {
 // 2D Simplex noise base.
 
 fn noise2_UnskewedBase(seed: i64, xs: f64, ys: f64) f32 {
+    //all seed operitaions can overflow
+
     // Get base points and offsets.
-    const xsb: i32 = @intFromFloat(@floor(xs));
-    const ysb: i32 = @intFromFloat(@floor(ys));
-    const xi: f32 = @intCast((xs - @as(f64, @floatFromInt(xsb))));
-    const yi: f32 = @intCast((ys - @as(f64, @floatFromInt(ysb))));
+    const xsb : i32 = fastFloor(xs);
+    const ysb : i32 = fastFloor(ys);
+    const xi : f32 = @as(f32, @floatFromInt(xs - @as(f64, @floatFromInt(xsb))));
+    const yi : f32 = @as(f32, @floatFromInt(ys - @as(f64, @floatFromInt(ysb))));
 
     // Prime pre-multiplication for hash.
-    const xsbp = Wrapping(@intFromFloat(xsb)) * Wrapping(PRIME_X);
-    const ysbp = Wrapping(@intFromFloat(ysb)) * Wrapping(PRIME_Y);
+    const xsbp : i64 = @as(i64, @intCast(xsb)) *% PRIME_X;
+    const ysbp : i64 = @as(i64, @intCast(ysb)) *% PRIME_X;
 
     // Unskew.
-    const t = (xi + yi) * @floatCast(UNSKEW_2D);
-    const dx0 = xi + t;
-    const dy0 = yi + t;
+    const t : f32 = @floatFromInt((xi + yi) * UNSKEW_2D);
+    const dx0 : f32 = xi + t;
+    const dy0 : f32 = yi + t;
 
     // First vertex.
-    var value = 0.0;
-    const a0 = RSQUARED_2D - dx0 * dx0 - dy0 * dy0;
+    var value : f64 = 0.0;
+    const a0: f32 = RSQUARED_2D - dx0 * dx0 - dy0 * dy0;
     if (a0 > 0.0) {
-        value = (a0 * a0) * (a0 * a0) *% grad2(seed, xsbp, ysbp, dx0, dy0);
+        value = (a0 *% a0) *% (a0 *% a0) *% grad2(seed, xsbp, ysbp, dx0, dy0);
     }
 
     // Second vertex.
-    const a1 = @floatCast(2.0 * (1.0 + 2.0 * UNSKEW_2D) * (1.0 / UNSKEW_2D + 2.0)) * t
-        + (@floatCast(-2.0 * (1.0 + 2.0 * UNSKEW_2D) * (1.0 + 2.0 * UNSKEW_2D)) + a0);
+    const a1 = @as(f32, @floatCast(2.0 * (1.0 + 2.0 * UNSKEW_2D) * (1.0 / UNSKEW_2D + 2.0))) * t
+        + @as(f32, @floatCast((-2.0 * (1.0 + 2.0 * UNSKEW_2D) * (1.0 + 2.0 * UNSKEW_2D))) + a0);
     if (a1 > 0.0) {
-        const dx1 = dx0 - @floatCast(1.0 + 2.0 * UNSKEW_2D);
-        const dy1 = dy0 - @floatCast(1.0 + 2.0 * UNSKEW_2D);
-        value += (a1 * a1)
-            * (a1 * a1)
+        const dx1 = dx0 - @as(f32, @floatCast((1.0 + 2.0 * UNSKEW_2D)));
+        const dy1 = dy0 - @as(f32, @floatCast((1.0 + 2.0 * UNSKEW_2D)));
+        value += (a1 *% a1)
+            *% (a1 *% a1)
             *% grad2(
                 seed,
                 xsbp + Wrapping(PRIME_X),
@@ -108,18 +105,18 @@ fn noise2_UnskewedBase(seed: i64, xs: f64, ys: f64) f32 {
 
     // Third vertex.
     if (dy0 > dx0) {
-        var dx2 = dx0 - @floatCast(UNSKEW_2D);
-        var dy2 = dy0 - @floatCast(UNSKEW_2D + 1.0);
-        var a2 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
+        const dx2 : f32 = dx0 - @as(f32, @floatCast(UNSKEW_2D));
+        const dy2 : f32 = dy0 - @as(f32, @floatCast(UNSKEW_2D + 1.0));
+        const a2 : f32 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
         if (a2 > 0.0) {
-            value += (a2 * a2) * (a2 * a2) *% grad2(seed, xsbp, ysbp + Wrapping(PRIME_Y), dx2, dy2);
+            value += (a2 *% a2) *% (a2 *% a2) *% grad2(seed, xsbp, ysbp + Wrapping(PRIME_Y), dx2, dy2);
         }
     } else {
-        const dx2 = dx0 - @floatCast(UNSKEW_2D + 1.0);
-        const dy2 = dy0 - @floatCast(UNSKEW_2D);
-        const a2 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
+        const dx2 : f32 = dx0 - @as(f32, @floatCast(UNSKEW_2D + 1.0));
+        const dy2 : f32 = dy0 - @as(f32, @floatCast(UNSKEW_2D));
+        const a2 : f32 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
         if (a2 > 0.0) {
-            value += (a2 * a2) * (a2 * a2) *% grad2(seed, xsbp + Wrapping(PRIME_X), ysbp, dx2, dy2);
+            value += (a2 *% a2) *% (a2 *% a2) *% grad2(seed, xsbp + Wrapping(PRIME_Y), ysbp, dx2, dy2);
         }
     }
 
@@ -133,104 +130,109 @@ fn noise2_UnskewedBase(seed: i64, xs: f64, ys: f64) f32 {
 // If Z is vertical in world coordinates, call noise3_ImproveXZ(x, y, Z).
 // For a time varied animation, call noise3_ImproveXY(x, y, T).
 
-pub fn noise3_ImproveXY(seed: i64, x: f64, y: f64, z: f64) f32 {
+pub fn noise3_ImproveXY(seed: i64, x: f64, y: f64, z: f64) -> f32 {
     // Re-orient the cubic lattices without skewing, so Z points up the main lattice diagonal,
     // and the planes formed by XY are moved far out of alignment with the cube faces.
     // Orthonormal rotation. Not a skew transform.
-    const xy = x + y;
-    const s2 = xy * ROTATE_3D_ORTHOGONALIZER;
-    const zz = z * ROOT3OVER3;
-    const xr = x + s2 + zz;
-    const yr = y + s2 + zz;
-    const zr = xy * -ROOT3OVER3 + zz;
+    let xy = x + y;
+    let s2 = xy * ROTATE_3D_ORTHOGONALIZER;
+    let zz = z * ROOT3OVER3;
+    let xr = x + s2 + zz;
+    let yr = y + s2 + zz;
+    let zr = xy * -ROOT3OVER3 + zz;
 
     // Evaluate both lattices to form a BCC lattice.
-    return noise3_UnrotatedBase(seed, xr, yr, zr);
+    noise3_UnrotatedBase(seed, xr, yr, zr)
 }
 
-// 3D OpenSimplex2 noise, with better visual isotropy in (X, Z).
-// Recommended for 3D terrain and time-varied animations.
-// The Y coordinate should always be the "different" coordinate in whatever your use case is.
-// If Y is vertical in world coordinates, call noise3_ImproveXZ(x, Y, z).
-// If Z is vertical in world coordinates, call noise3_ImproveXZ(x, Z, y) or use noise3_ImproveXY.
-// For a time varied animation, call noise3_ImproveXZ(x, T, y) or use noise3_ImproveXY.
-
-pub fn noise3_ImproveXZ(seed: i64, x: f64, y: f64, z: f64) f32 {
+/**
+    3D OpenSimplex2 noise, with better visual isotropy in (X, Z).
+    Recommended for 3D terrain and time-varied animations.
+    The Y coordinate should always be the "different" coordinate in whatever your use case is.
+    If Y is vertical in world coordinates, call noise3_ImproveXZ(x, Y, z).
+    If Z is vertical in world coordinates, call noise3_ImproveXZ(x, Z, y) or use noise3_ImproveXY.
+    For a time varied animation, call noise3_ImproveXZ(x, T, y) or use noise3_ImproveXY.
+*/
+pub fn noise3_ImproveXZ(seed: i64, x: f64, y: f64, z: f64) -> f32 {
     // Re-orient the cubic lattices without skewing, so Y points up the main lattice diagonal,
     // and the planes formed by XZ are moved far out of alignment with the cube faces.
     // Orthonormal rotation. Not a skew transform.
-    const xz = x + z;
-    const s2 = xz * ROTATE_3D_ORTHOGONALIZER;
-    const yy = y * ROOT3OVER3;
-    const xr = x + s2 + yy;
-    const zr = z + s2 + yy;
-    const yr = xz * -ROOT3OVER3 + yy;
+    let xz = x + z;
+    let s2 = xz * ROTATE_3D_ORTHOGONALIZER;
+    let yy = y * ROOT3OVER3;
+    let xr = x + s2 + yy;
+    let zr = z + s2 + yy;
+    let yr = xz * -ROOT3OVER3 + yy;
 
     // Evaluate both lattices to form a BCC lattice.
-    return noise3_UnrotatedBase(seed, xr, yr, zr);
+    noise3_UnrotatedBase(seed, xr, yr, zr)
 }
 
-// 3D OpenSimplex2 noise, fallback rotation option
-// Use noise3_ImproveXY or noise3_ImproveXZ instead, wherever appropriate.
-// They have less diagonal bias. This function's best use is as a fallback.
-
-pub fn noise3_Fallback(seed: i64, x: f64, y: f64, z: f64) f32 {
+/**
+    3D OpenSimplex2 noise, fallback rotation option
+    Use noise3_ImproveXY or noise3_ImproveXZ instead, wherever appropriate.
+    They have less diagonal bias. This function's best use is as a fallback.
+*/
+pub fn noise3_Fallback(seed: i64, x: f64, y: f64, z: f64) -> f32 {
     // Re-orient the cubic lattices via rotation, to produce a familiar look.
     // Orthonormal rotation. Not a skew transform.
-    const r = FALLBACK_ROTATE_3D * (x + y + z);
-    const xr = r - x;
-    const yr = r - y;
-    const zr = r - z;
+    let r = FALLBACK_ROTATE_3D * (x + y + z);
+    let xr = r - x;
+    let yr = r - y;
+    let zr = r - z;
 
     // Evaluate both lattices to form a BCC lattice.
-    return noise3_UnrotatedBase(seed, xr, yr, zr);
+    noise3_UnrotatedBase(seed, xr, yr, zr)
 }
 
-// Generate overlapping cubic lattices for 3D OpenSimplex2 noise.
+/**
+    Generate overlapping cubic lattices for 3D OpenSimplex2 noise.
+*/
+fn noise3_UnrotatedBase(seed: i64, xr: f64, yr: f64, zr: f64) -> f32 {
+    let mut seed = Wrapping(seed);
 
-fn noise3_UnrotatedBase(seed: i64, xr: f64, yr: f64, zr: f64) f32 {
     // Get base points and offsets.
-    const xrb = fastRound(xr);
-    const yrb = fastRound(yr);
-    const zrb = fastRound(zr);
-    var xri : f32 = @floatCast(xr - @floatCast(xrb));
-    var yri : f32 = @floatCast(yr - @floatCast(yrb));
-    var zri : f32 = @floatCast(zr - @floatCast(zrb));
+    let xrb = fastRound(xr);
+    let yrb = fastRound(yr);
+    let zrb = fastRound(zr);
+    let mut xri = (xr - xrb as f64) as f32;
+    let mut yri = (yr - yrb as f64) as f32;
+    let mut zri = (zr - zrb as f64) as f32;
 
     // -1 if positive, 1 if negative.
-    var xNSign : f32 = @floatCast(-1.0 - xri) | 1;
-    var yNSign : f32 = @floatCast(-1.0 - yri) | 1;
-    var zNSign : f32 = @floatCast(-1.0 - zri) | 1;
+    let mut xNSign = (-1.0 - xri) as i32 | 1;
+    let mut yNSign = (-1.0 - yri) as i32 | 1;
+    let mut zNSign = (-1.0 - zri) as i32 | 1;
 
     // Compute absolute values, using the above as a shortcut. This was faster in my tests for some reason.
-    var ax0 : f32 = @floatCast(xNSign) * -xri;
-    var ay0 : f32 = @floatCast(yNSign) * -yri;
-    var az0 : f32 = @floatCast(zNSign) * -zri;
+    let mut ax0 = xNSign as f32 * -xri;
+    let mut ay0 = yNSign as f32 * -yri;
+    let mut az0 = zNSign as f32 * -zri;
 
     // Prime pre-multiplication for hash.
-    var xrbp : i64 = @floatFromInt(xrb) *% PRIME_X;
-    var yrbp : i64 = @floatFromInt(xrb) *% PRIME_Y;
-    var zrbp : i64 = @floatFromInt(xrb) *% PRIME_Z;
+    let mut xrbp = Wrapping(xrb as i64) * Wrapping(PRIME_X);
+    let mut yrbp = Wrapping(yrb as i64) * Wrapping(PRIME_Y);
+    let mut zrbp = Wrapping(zrb as i64) * Wrapping(PRIME_Z);
 
     // Loop: Pick an edge on each lattice copy.
-    var value = 0.0;
-    var a = (RSQUARED_3D - xri * xri) - (yri * yri + zri * zri);
-    for (0..) |l| {
+    let mut value = 0.0;
+    let mut a = (RSQUARED_3D - xri * xri) - (yri * yri + zri * zri);
+    for l in 0.. {
         // Closest point on cube.
-        if (a > 0.0) {
-            value += (a * a) * (a * a) *% grad3(seed, xrbp, yrbp, zrbp, xri, yri, zri);
+        if a > 0.0 {
+            value += (a * a) * (a * a) * grad3(seed, xrbp, yrbp, zrbp, xri, yri, zri);
         }
 
         // Second-closest point.
-        if (ax0 >= ay0 and ax0 >= az0) {
-            var b : f32 = a + ax0 + ax0;
-            if (b > 1.0) {
+        if ax0 >= ay0 && ax0 >= az0 {
+            let mut b = a + ax0 + ax0;
+            if b > 1.0 {
                 b -= 1.0;
                 value += (b * b)
                     * (b * b)
                     * grad3(
                         seed,
-                        xrbp % Wrapping(xNSign as i64) *% Wrapping(PRIME_X),
+                        xrbp - Wrapping(xNSign as i64) * Wrapping(PRIME_X),
                         yrbp,
                         zrbp,
                         xri + xNSign as f32,
@@ -304,7 +306,7 @@ fn noise3_UnrotatedBase(seed: i64, xr: f64, yr: f64, zr: f64) f32 {
         seed ^= SEED_FLIP_3D;
     }
 
-    return value;
+    value
 }
 
 /**
@@ -543,26 +545,24 @@ fn grad4(
     (grads[gi | 0] * dx + grads[gi | 1] * dy) + (grads[gi | 2] * dz + grads[gi | 3] * dw)
 }
 
-fn fastFloor(x: f64) -> i32 {
-    let xi = x as i32;
-    if x < xi as f64 {
-        xi - 1
+fn fastFloor(x: f64) i32 {
+    const xi : i32 = @intCast(x);
+    if (x < @as(f64, @floatFromInt(xi))) {
+        return xi - 1;
     } else {
-        xi
+        return xi;
     }
 }
 
-fn fastRound(x: f64) -> i32 {
-    if x < 0.0 {
-        (x - 0.5) as i32
+fn fastRound(x: f64) i32 {
+    if (x < 0.0) {
+        return @floatFromInt(x - 0.5);
     } else {
-        (x + 0.5) as i32
+        @floatFromInt(x + 0.5);
     }
 }
 
-/*
-    gradients
-*/
+// gradients
 
 struct Gradients {
     gradients2D: Vec<f32>,
@@ -616,7 +616,8 @@ fn initGradients() -> Gradients {
     }
 }
 
-const GRAD2_SRC: [_]f64 = .{
+#[rustfmt::skip]
+const GRAD2_SRC: &[f64] = &[
      0.38268343236509,   0.923879532511287,
      0.923879532511287,  0.38268343236509,
      0.923879532511287, -0.38268343236509,
@@ -625,6 +626,7 @@ const GRAD2_SRC: [_]f64 = .{
     -0.923879532511287, -0.38268343236509,
     -0.923879532511287,  0.38268343236509,
     -0.38268343236509,   0.923879532511287,
+    //-------------------------------------//
      0.130526192220052,  0.99144486137381,
      0.608761429008721,  0.793353340291235,
      0.793353340291235,  0.608761429008721,
@@ -641,9 +643,10 @@ const GRAD2_SRC: [_]f64 = .{
     -0.793353340291235,  0.608761429008721,
     -0.608761429008721,  0.793353340291235,
     -0.130526192220052,  0.99144486137381,
-};
+];
 
-const GRAD3_SRC: [_]f64 = .{
+#[rustfmt::skip]
+const GRAD3_SRC: &[f64] = &[
      2.22474487139,       2.22474487139,      -1.0,                 0.0,
      2.22474487139,       2.22474487139,       1.0,                 0.0,
      3.0862664687972017,  1.1721513422464978,  0.0,                 0.0,
@@ -660,6 +663,7 @@ const GRAD3_SRC: [_]f64 = .{
      1.0,                -2.22474487139,       2.22474487139,       0.0,
      0.0,                -1.1721513422464978,  3.0862664687972017,  0.0,
      0.0,                -3.0862664687972017,  1.1721513422464978,  0.0,
+    //--------------------------------------------------------------------//
     -2.22474487139,      -2.22474487139,      -1.0,                 0.0,
     -2.22474487139,      -2.22474487139,       1.0,                 0.0,
     -3.0862664687972017, -1.1721513422464978,  0.0,                 0.0,
@@ -692,9 +696,10 @@ const GRAD3_SRC: [_]f64 = .{
      2.22474487139,       1.0,                 2.22474487139,       0.0,
      1.1721513422464978,  0.0,                 3.0862664687972017,  0.0,
      3.0862664687972017,  0.0,                 1.1721513422464978,  0.0,
-};
+];
 
-const GRAD4_SRC: [_]f64 = .{
+#[rustfmt::skip]
+const GRAD4_SRC: &[f64] = &[
     -0.6740059517812944,   -0.3239847771997537,   -0.3239847771997537,    0.5794684678643381,
     -0.7504883828755602,   -0.4004672082940195,    0.15296486218853164,   0.5029860367700724,
     -0.7504883828755602,    0.15296486218853164,  -0.4004672082940195,    0.5029860367700724,
@@ -727,6 +732,7 @@ const GRAD4_SRC: [_]f64 = .{
      0.7504883828755602,   -0.5029860367700724,   -0.15296486218853164,   0.4004672082940195,
      0.7504883828755602,   -0.5029860367700724,    0.4004672082940195,   -0.15296486218853164,
      0.6740059517812944,   -0.5794684678643381,    0.3239847771997537,    0.3239847771997537,
+    //------------------------------------------------------------------------------------------//
     -0.753341017856078,    -0.37968289875261624,  -0.37968289875261624,  -0.37968289875261624,
     -0.7821684431180708,   -0.4321472685365301,   -0.4321472685365301,    0.12128480194602098,
     -0.7821684431180708,   -0.4321472685365301,    0.12128480194602098,  -0.4321472685365301,
@@ -855,4 +861,4 @@ const GRAD4_SRC: [_]f64 = .{
      0.7821684431180708,    0.4321472685365301,   -0.12128480194602098,   0.4321472685365301,
      0.7821684431180708,    0.4321472685365301,    0.4321472685365301,   -0.12128480194602098,
      0.753341017856078,     0.37968289875261624,   0.37968289875261624,   0.37968289875261624,
-};
+];

@@ -130,65 +130,62 @@ fn noise2_UnskewedBase(seed: i64, xs: f64, ys: f64) f32 {
 // If Z is vertical in world coordinates, call noise3_ImproveXZ(x, y, Z).
 // For a time varied animation, call noise3_ImproveXY(x, y, T).
 
-pub fn noise3_ImproveXY(seed: i64, x: f64, y: f64, z: f64) -> f32 {
+pub fn noise3_ImproveXY(seed: i64, x: f64, y: f64, z: f64) f32 {
     // Re-orient the cubic lattices without skewing, so Z points up the main lattice diagonal,
     // and the planes formed by XY are moved far out of alignment with the cube faces.
     // Orthonormal rotation. Not a skew transform.
-    let xy = x + y;
-    let s2 = xy * ROTATE_3D_ORTHOGONALIZER;
-    let zz = z * ROOT3OVER3;
-    let xr = x + s2 + zz;
-    let yr = y + s2 + zz;
-    let zr = xy * -ROOT3OVER3 + zz;
+    const xy : f64 = x + y;
+    const s2 : f64= xy * ROTATE_3D_ORTHOGONALIZER;
+    const zz : f64= z * ROOT3OVER3;
+    const xr : f64= x + s2 + zz;
+    const yr : f64 = y + s2 + zz;
+    const zr : f64 = xy * -ROOT3OVER3 + zz;
 
     // Evaluate both lattices to form a BCC lattice.
-    noise3_UnrotatedBase(seed, xr, yr, zr)
+    return noise3_UnrotatedBase(seed, xr, yr, zr);
 }
 
-/**
-    3D OpenSimplex2 noise, with better visual isotropy in (X, Z).
-    Recommended for 3D terrain and time-varied animations.
-    The Y coordinate should always be the "different" coordinate in whatever your use case is.
-    If Y is vertical in world coordinates, call noise3_ImproveXZ(x, Y, z).
-    If Z is vertical in world coordinates, call noise3_ImproveXZ(x, Z, y) or use noise3_ImproveXY.
-    For a time varied animation, call noise3_ImproveXZ(x, T, y) or use noise3_ImproveXY.
-*/
-pub fn noise3_ImproveXZ(seed: i64, x: f64, y: f64, z: f64) -> f32 {
+// 3D OpenSimplex2 noise, with better visual isotropy in (X, Z).
+// Recommended for 3D terrain and time-varied animations.
+// The Y coordinate should always be the "different" coordinate in whatever your use case is.
+// If Y is vertical in world coordinates, call noise3_ImproveXZ(x, Y, z).
+// If Z is vertical in world coordinates, call noise3_ImproveXZ(x, Z, y) or use noise3_ImproveXY.
+// For a time varied animation, call noise3_ImproveXZ(x, T, y) or use noise3_ImproveXY.
+
+pub fn noise3_ImproveXZ(seed: i64, x: f64, y: f64, z: f64) f32 {
     // Re-orient the cubic lattices without skewing, so Y points up the main lattice diagonal,
     // and the planes formed by XZ are moved far out of alignment with the cube faces.
     // Orthonormal rotation. Not a skew transform.
-    let xz = x + z;
-    let s2 = xz * ROTATE_3D_ORTHOGONALIZER;
-    let yy = y * ROOT3OVER3;
-    let xr = x + s2 + yy;
-    let zr = z + s2 + yy;
-    let yr = xz * -ROOT3OVER3 + yy;
+    const xz : f64 = x + z;
+    const s2 : f64 = xz * ROTATE_3D_ORTHOGONALIZER;
+    const yy : f64 = y * ROOT3OVER3;
+    const xr : f64 = x + s2 + yy;
+    const zr : f64 = z + s2 + yy;
+    const yr : f64 = xz * -ROOT3OVER3 + yy;
 
     // Evaluate both lattices to form a BCC lattice.
-    noise3_UnrotatedBase(seed, xr, yr, zr)
+    return noise3_UnrotatedBase(seed, xr, yr, zr);
 }
 
-/**
-    3D OpenSimplex2 noise, fallback rotation option
-    Use noise3_ImproveXY or noise3_ImproveXZ instead, wherever appropriate.
-    They have less diagonal bias. This function's best use is as a fallback.
-*/
-pub fn noise3_Fallback(seed: i64, x: f64, y: f64, z: f64) -> f32 {
+// 3D OpenSimplex2 noise, fallback rotation option
+// Use noise3_ImproveXY or noise3_ImproveXZ instead, wherever appropriate.
+// They have less diagonal bias. This function's best use is as a fallback.
+
+pub fn noise3_Fallback(seed: i64, x: f64, y: f64, z: f64) f32 {
     // Re-orient the cubic lattices via rotation, to produce a familiar look.
     // Orthonormal rotation. Not a skew transform.
-    let r = FALLBACK_ROTATE_3D * (x + y + z);
-    let xr = r - x;
-    let yr = r - y;
-    let zr = r - z;
+    const r : f64 = FALLBACK_ROTATE_3D * (x + y + z);
+    const xr : f64 = r - x;
+    const yr : f64 = r - y;
+    const zr : f64 = r - z;
 
     // Evaluate both lattices to form a BCC lattice.
-    noise3_UnrotatedBase(seed, xr, yr, zr)
+    return noise3_UnrotatedBase(seed, xr, yr, zr);
 }
 
-/**
-    Generate overlapping cubic lattices for 3D OpenSimplex2 noise.
-*/
-fn noise3_UnrotatedBase(seed: i64, xr: f64, yr: f64, zr: f64) -> f32 {
+// Generate overlapping cubic lattices for 3D OpenSimplex2 noise.
+
+fn noise3_UnrotatedBase(seed: i64, xr: f64, yr: f64, zr: f64) f32 {
     let mut seed = Wrapping(seed);
 
     // Get base points and offsets.

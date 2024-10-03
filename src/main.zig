@@ -186,25 +186,23 @@ pub fn noise3_Fallback(seed: i64, x: f64, y: f64, z: f64) f32 {
 // Generate overlapping cubic lattices for 3D OpenSimplex2 noise.
 
 fn noise3_UnrotatedBase(seed: i64, xr: f64, yr: f64, zr: f64) f32 {
-    let mut seed = Wrapping(seed);
-
     // Get base points and offsets.
-    let xrb = fastRound(xr);
-    let yrb = fastRound(yr);
-    let zrb = fastRound(zr);
-    let mut xri = (xr - xrb as f64) as f32;
-    let mut yri = (yr - yrb as f64) as f32;
-    let mut zri = (zr - zrb as f64) as f32;
+    const xrb = fastRound(xr);
+    const yrb = fastRound(yr);
+    const zrb = fastRound(zr);
+    var xri : f32 = (xr - @as(f64, @floatFromInt(xrb)));
+    var yri : f32 = (yr - @as(f64, @floatFromInt(yrb)));
+    var zri : f32 = (zr - @as(f64, @floatFromInt(zrb)));
 
     // -1 if positive, 1 if negative.
-    let mut xNSign = (-1.0 - xri) as i32 | 1;
-    let mut yNSign = (-1.0 - yri) as i32 | 1;
-    let mut zNSign = (-1.0 - zri) as i32 | 1;
+    var xNSign : i32 = @as(i32, @floatFromInt(-1.0 - xri)) | 1;
+    var yNSign : i32 = @as(i32, @floatFromInt(-1.0 - yri)) | 1;
+    var zNSign : i32 = @as(i32, @floatFromInt(-1.0 - zri)) | 1;
 
     // Compute absolute values, using the above as a shortcut. This was faster in my tests for some reason.
-    let mut ax0 = xNSign as f32 * -xri;
-    let mut ay0 = yNSign as f32 * -yri;
-    let mut az0 = zNSign as f32 * -zri;
+    var ax0 = @as(f32, @floatFromInt(xNSign)) * -xri;
+    var ay0 = @as(f32, @floatFromInt(yNSign)) * -yri;
+    var az0 = @as(f32, @floatFromInt(zNSign)) * -zri;
 
     // Prime pre-multiplication for hash.
     let mut xrbp = Wrapping(xrb as i64) * Wrapping(PRIME_X);

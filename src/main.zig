@@ -205,55 +205,55 @@ fn noise3_UnrotatedBase(seed: i64, xr: f64, yr: f64, zr: f64) f32 {
     var az0 = @as(f32, @floatFromInt(zNSign)) * -zri;
 
     // Prime pre-multiplication for hash.
-    let mut xrbp = Wrapping(xrb as i64) * Wrapping(PRIME_X);
-    let mut yrbp = Wrapping(yrb as i64) * Wrapping(PRIME_Y);
-    let mut zrbp = Wrapping(zrb as i64) * Wrapping(PRIME_Z);
+    var xrbp = @as(i64, @intCast(xrb)) *% PRIME_X;
+    var yrbp = @as(i64, @intCast(yrb)) *% PRIME_Y;
+    var zrbp = @as(i64, @intCast(zrb)) *% PRIME_Z;
 
     // Loop: Pick an edge on each lattice copy.
-    let mut value = 0.0;
-    let mut a = (RSQUARED_3D - xri * xri) - (yri * yri + zri * zri);
-    for l in 0.. {
+    var value: f32 = 0.0;
+    var a: f32 = (RSQUARED_3D - xri * xri) - (yri * yri + zri * zri);
+    for(0..) |l| {
         // Closest point on cube.
-        if a > 0.0 {
+        if (a > 0.0) {
             value += (a * a) * (a * a) * grad3(seed, xrbp, yrbp, zrbp, xri, yri, zri);
         }
 
         // Second-closest point.
-        if ax0 >= ay0 && ax0 >= az0 {
-            let mut b = a + ax0 + ax0;
-            if b > 1.0 {
+        if (ax0 >= ay0 and ax0 >= az0) {
+            var b : f32 = a + ax0 + ax0;
+            if (b > 1.0) {
                 b -= 1.0;
                 value += (b * b)
                     * (b * b)
                     * grad3(
                         seed,
-                        xrbp - Wrapping(xNSign as i64) * Wrapping(PRIME_X),
+                        xrbp -% @as(i64, @intCast(xNSign)) *% PRIME_X,
                         yrbp,
                         zrbp,
-                        xri + xNSign as f32,
+                        xri + @as(f32, @floatFromInt(xNSign)),
                         yri,
                         zri,
                     );
             }
-        } else if ay0 > ax0 && ay0 >= az0 {
-            let mut b = a + ay0 + ay0;
-            if b > 1.0 {
+        } else if (ay0 > ax0 and ay0 >= az0) {
+            var b : f32 = a + ay0 + ay0;
+            if (b > 1.0) {
                 b -= 1.0;
                 value += (b * b)
                     * (b * b)
                     * grad3(
                         seed,
                         xrbp,
-                        yrbp - Wrapping(yNSign as i64) * Wrapping(PRIME_Y),
+                        yrbp -% @as(i64, @intCast(yNSign)) *% PRIME_Y,
                         zrbp,
                         xri,
-                        yri + yNSign as f32,
+                        yri + @as(f32, @floatFromInt(xNSign)),
                         zri,
                     );
             }
         } else {
-            let mut b = a + az0 + az0;
-            if b > 1.0 {
+            var b : f32 = a + az0 + az0;
+            if (b > 1.0) {
                 b -= 1.0;
                 value += (b * b)
                     * (b * b)
@@ -261,16 +261,16 @@ fn noise3_UnrotatedBase(seed: i64, xr: f64, yr: f64, zr: f64) f32 {
                         seed,
                         xrbp,
                         yrbp,
-                        zrbp - Wrapping(zNSign as i64) * Wrapping(PRIME_Z),
+                        zrbp -% @as(i64, @intCast(zNSign)) *% PRIME_Z,
                         xri,
                         yri,
-                        zri + zNSign as f32,
+                        zri + @as(f32, @floatFromInt(xNSign)),
                     );
             }
         }
 
         // Break from loop if we're done, skipping updates below.
-        if l == 1 {
+        if (l == 1) {
             break;
         }
 
@@ -280,17 +280,17 @@ fn noise3_UnrotatedBase(seed: i64, xr: f64, yr: f64, zr: f64) f32 {
         az0 = 0.5 - az0;
 
         // Update relative coordinate.
-        xri = xNSign as f32 * ax0;
-        yri = yNSign as f32 * ay0;
-        zri = zNSign as f32 * az0;
+        xri = @as(f32, @floatFromInt(xNSign)) * ax0;
+        yri = @as(f32, @floatFromInt(yNSign)) * ay0;
+        zri = @as(f32, @floatFromInt(zNSign)) * az0;
 
         // Update falloff.
         a += (0.75 - ax0) - (ay0 + az0);
 
         // Update prime for hash.
-        xrbp += (xNSign as i64 >> 1) & PRIME_X;
-        yrbp += (yNSign as i64 >> 1) & PRIME_Y;
-        zrbp += (zNSign as i64 >> 1) & PRIME_Z;
+        xrbp += (@as(i64, @intCast(xNSign)) >> 1) & PRIME_X;
+        yrbp += (@as(f32, @intCast(yNSign)) >> 1) & PRIME_Y;
+        zrbp += (@as(f32, @intCast(zNSign)) >> 1) & PRIME_Z;
 
         // Update the reverse sign indicators.
         xNSign = -xNSign;
@@ -301,118 +301,110 @@ fn noise3_UnrotatedBase(seed: i64, xr: f64, yr: f64, zr: f64) f32 {
         seed ^= SEED_FLIP_3D;
     }
 
-    value
+    return value;
 }
 
-/**
-    4D OpenSimplex2 noise, with XYZ oriented like noise3_ImproveXY
-    and W for an extra degree of freedom. W repeats eventually.
-    Recommended for time-varied animations which texture a 3D object (W=time)
-    in a space where Z is vertical
-*/
-pub fn noise4_ImproveXYZ_ImproveXY(seed: i64, x: f64, y: f64, z: f64, w: f64) -> f32 {
-    let xy = x + y;
-    let s2 = xy * -0.21132486540518699998;
-    let zz = z * 0.28867513459481294226;
-    let ww = w * 0.2236067977499788;
-    let xr = x + (zz + ww + s2);
-    let yr = y + (zz + ww + s2);
-    let zr = xy * -0.57735026918962599998 + (zz + ww);
-    let wr = z * -0.866025403784439 + ww;
+// 4D OpenSimplex2 noise, with XYZ oriented like noise3_ImproveXY
+// and W for an extra degree of freedom. W repeats eventually.
+// Recommended for time-varied animations which texture a 3D object (W=time)
+// in a space where Z is vertical
 
-    noise4_UnskewedBase(seed, xr, yr, zr, wr)
+pub fn noise4_ImproveXYZ_ImproveXY(seed: i64, x: f64, y: f64, z: f64, w: f64)  f32 {
+    const xy = x + y;
+    const s2 = xy * -0.21132486540518699998;
+    const zz = z * 0.28867513459481294226;
+    const ww = w * 0.2236067977499788;
+    const xr = x + (zz + ww + s2);
+    const yr = y + (zz + ww + s2);
+    const zr = xy * -0.57735026918962599998 + (zz + ww);
+    const wr = z * -0.866025403784439 + ww;
+
+    return noise4_UnskewedBase(seed, xr, yr, zr, wr);
 }
 
-/**
-    4D OpenSimplex2 noise, with XYZ oriented like noise3_ImproveXZ
-    and W for an extra degree of freedom. W repeats eventually.
-    Recommended for time-varied animations which texture a 3D object (W=time)
-    in a space where Y is vertical
-*/
-pub fn noise4_ImproveXYZ_ImproveXZ(seed: i64, x: f64, y: f64, z: f64, w: f64) -> f32 {
-    let xz = x + z;
-    let s2 = xz * -0.21132486540518699998;
-    let yy = y * 0.28867513459481294226;
-    let ww = w * 0.2236067977499788;
-    let xr = x + (yy + ww + s2);
-    let zr = z + (yy + ww + s2);
-    let yr = xz * -0.57735026918962599998 + (yy + ww);
-    let wr = y * -0.866025403784439 + ww;
+// 4D OpenSimplex2 noise, with XYZ oriented like noise3_ImproveXZ
+// and W for an extra degree of freedom. W repeats eventually.
+// Recommended for time-varied animations which texture a 3D object (W=time)
+// in a space where Y is vertical
 
-    noise4_UnskewedBase(seed, xr, yr, zr, wr)
+pub fn noise4_ImproveXYZ_ImproveXZ(seed: i64, x: f64, y: f64, z: f64, w: f64) f32 {
+    const xz = x + z;
+    const s2 = xz * -0.21132486540518699998;
+    const yy = y * 0.28867513459481294226;
+    const ww = w * 0.2236067977499788;
+    const xr = x + (yy + ww + s2);
+    const zr = z + (yy + ww + s2);
+    const yr = xz * -0.57735026918962599998 + (yy + ww);
+    const wr = y * -0.866025403784439 + ww;
+
+    return noise4_UnskewedBase(seed, xr, yr, zr, wr);
 }
 
-/**
-    4D OpenSimplex2 noise, with XYZ oriented like noise3_Fallback
-    and W for an extra degree of freedom. W repeats eventually.
-    Recommended for time-varied animations which texture a 3D object (W=time)
-    where there isn't a clear distinction between horizontal and vertical
-*/
-pub fn noise4_ImproveXYZ(seed: i64, x: f64, y: f64, z: f64, w: f64) -> f32 {
-    let xyz = x + y + z;
-    let ww = w * 0.2236067977499788;
-    let s2 = xyz * -0.16666666666666666 + ww;
-    let xs = x + s2;
-    let ys = y + s2;
-    let zs = z + s2;
-    let ws = -0.5 * xyz + ww;
+// 4D OpenSimplex2 noise, with XYZ oriented like noise3_Fallback
+// and W for an extra degree of freedom. W repeats eventually.
+// Recommended for time-varied animations which texture a 3D object (W=time)
+// where there isn't a clear distinction between horizontal and vertical
 
-    noise4_UnskewedBase(seed, xs, ys, zs, ws)
+pub fn noise4_ImproveXYZ(seed: i64, x: f64, y: f64, z: f64, w: f64) f32 {
+    const xyz = x + y + z;
+    const ww = w * 0.2236067977499788;
+    const s2 = xyz * -0.16666666666666666 + ww;
+    const xs = x + s2;
+    const ys = y + s2;
+    const zs = z + s2;
+    const ws = -0.5 * xyz + ww;
+
+    return noise4_UnskewedBase(seed, xs, ys, zs, ws);
 }
 
-/**
-    4D OpenSimplex2 noise, with XY and ZW forming orthogonal triangular-based planes.
-    Recommended for 3D terrain, where X and Y (or Z and W) are horizontal.
-    Recommended for noise(x, y, sin(time), cos(time)) trick.
-*/
-pub fn noise4_ImproveXY_ImproveZW(seed: i64, x: f64, y: f64, z: f64, w: f64) -> f32 {
-    let s2 = (x + y) * -0.178275657951399372 + (z + w) * 0.215623393288842828;
-    let t2 = (z + w) * -0.403949762580207112 + (x + y) * -0.375199083010075342;
-    let xs = x + s2;
-    let ys = y + s2;
-    let zs = z + t2;
-    let ws = w + t2;
+// 4D OpenSimplex2 noise, with XY and ZW forming orthogonal triangular-based planes.
+// Recommended for 3D terrain, where X and Y (or Z and W) are horizontal.
+// Recommended for noise(x, y, sin(time), cos(time)) trick.
 
-    noise4_UnskewedBase(seed, xs, ys, zs, ws)
+pub fn noise4_ImproveXY_ImproveZW(seed: i64, x: f64, y: f64, z: f64, w: f64) f32 {
+    const s2 = (x + y) * -0.178275657951399372 + (z + w) * 0.215623393288842828;
+    const t2 = (z + w) * -0.403949762580207112 + (x + y) * -0.375199083010075342;
+    const xs = x + s2;
+    const ys = y + s2;
+    const zs = z + t2;
+    const ws = w + t2;
+
+    return noise4_UnskewedBase(seed, xs, ys, zs, ws);
 }
 
-/**
-    4D OpenSimplex2 noise, fallback lattice orientation.
-*/
-pub fn noise4_Fallback(seed: i64, x: f64, y: f64, z: f64, w: f64) -> f32 {
+// 4D OpenSimplex2 noise, fallback lattice orientation.
+
+pub fn noise4_Fallback(seed: i64, x: f64, y: f64, z: f64, w: f64) f32 {
     // Get points for A4 lattice
-    let s = SKEW_4D as f64 * (x + y + z + w);
-    let xs = x + s;
-    let ys = y + s;
-    let zs = z + s;
-    let ws = w + s;
+    const s = @as(f64, @floatCast(SKEW_4D )) * (x + y + z + w);
+    const xs = x + s;
+    const ys = y + s;
+    const zs = z + s;
+    const ws = w + s;
 
-    noise4_UnskewedBase(seed, xs, ys, zs, ws)
+    return noise4_UnskewedBase(seed, xs, ys, zs, ws);
 }
 
-/**
-    4D OpenSimplex2 noise base.
-*/
-fn noise4_UnskewedBase(seed: i64, xs: f64, ys: f64, zs: f64, ws: f64) -> f32 {
-    let mut seed = Wrapping(seed);
+// 4D OpenSimplex2 noise base.
 
+fn noise4_UnskewedBase(seed: i64, xs: f64, ys: f64, zs: f64, ws: f64) f32 {
     // Get base points and offsets
-    let xsb = fastFloor(xs);
-    let ysb = fastFloor(ys);
-    let zsb = fastFloor(zs);
-    let wsb = fastFloor(ws);
-    let mut xsi = (xs - xsb as f64) as f32;
-    let mut ysi = (ys - ysb as f64) as f32;
-    let mut zsi = (zs - zsb as f64) as f32;
-    let mut wsi = (ws - wsb as f64) as f32;
+    const xsb: i32 = fastFloor(xs);
+    const ysb: i32 = fastFloor(ys);
+    const zsb: i32 = fastFloor(zs);
+    const wsb: i32 = fastFloor(ws);
+    var xsi: f32 = @floatCast(xs - @as(f64, @intFromFloat(xsb)));
+    var ysi: f32 = @floatCast(xs - @as(f64, @intFromFloat(ysb)));
+    var zsi: f32 = @floatCast(xs - @as(f64, @intFromFloat(zsb)));
+    var wsi: f32 = @floatCast(xs - @as(f64, @intFromFloat(wsb)));
 
     // Determine which lattice we can be confident has a contributing point its corresponding cell's base simplex.
     // We only look at the spaces between the diagonal planes. This proved effective in all of my tests.
-    let siSum = (xsi + ysi) + (zsi + wsi);
-    let startingLattice = (siSum * 1.25) as i32;
+    const siSum = (xsi + ysi) + (zsi + wsi);
+    const startingLattice: i32 = @intFromFloat(siSum * 1.25);
 
     // Offset for seed based on first lattice copy.
-    seed += Wrapping(startingLattice as i64) * Wrapping(SEED_OFFSET_4D);
+    seed += @as(i64, @intCast(startingLattice)) *% Wrapping(SEED_OFFSET_4D);
 
     // Offset for lattice point relative positions (skewed)
     let startingLatticeOffset = startingLattice as f32 * -LATTICE_STEP_4D;

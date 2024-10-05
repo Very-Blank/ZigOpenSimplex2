@@ -64,13 +64,13 @@ pub const Noise2 = struct {
     }
 
     // 2D Simplex noise, standard lattice orientation.
-    pub fn get(self: *const Noise2, x: f64, y: f64) f32 {
+    pub fn standard(self: *const Noise2, x: f64, y: f64) f32 {
         // Get points for A2* lattice
         const s: f64 = SKEW_2D * (x + y);
         const xs: f64 = x + s;
         const ys: f64 = y + s;
 
-        return self.getUnskewedBase(xs, ys);
+        return self.unskewedBase(xs, ys);
     }
 
     // 2D Simplex noise, with Y pointing down the main diagonal.
@@ -78,16 +78,16 @@ pub const Noise2 = struct {
     // Probably slightly less optimal for heightmaps or continent maps,
     // unless your map is centered around an equator. It's a subtle
     // difference, but the option is here to make it an easy choice.
-    pub fn getImproveX(self: *const Noise2, x: f64, y: f64) f32 {
+    pub fn improveX(self: *const Noise2, x: f64, y: f64) f32 {
         // Skew transform and rotation baked into one.
         const xx: f64 = x * ROOT2OVER2;
         const yy: f64 = y * (ROOT2OVER2 * (1.0 + 2.0 * SKEW_2D));
 
-        return self.getUnskewedBase(yy + xx, yy - xx);
+        return self.unskewedBase(yy + xx, yy - xx);
     }
 
     // 2D Simplex noise base.
-    pub fn getUnskewedBase(self: *const Noise2, xs: f64, ys: f64) f32 {
+    fn unskewedBase(self: *const Noise2, xs: f64, ys: f64) f32 {
         // Get base points and offsets.
         const xsb: i32 = fastFloor(xs);
         const ysb: i32 = fastFloor(ys);
@@ -143,12 +143,11 @@ pub const Noise2 = struct {
         return value;
     }
 
-    pub fn grad2(self: *const Noise2, xsvp: i64, ysvp: i64, dx: f32, dy: f32) f32 {
+    fn grad2(self: *const Noise2, xsvp: i64, ysvp: i64, dx: f32, dy: f32) f32 {
         var hash: i64 = self.seed ^ xsvp ^ ysvp;
         hash *%= HASH_MULTIPLIER;
         hash ^= hash >> (64 - N_GRADS_2D_EXPONENT + 1);
         const gi: usize = @intCast(hash & ((@as(i64, @intCast(N_GRADS_2D)) - 1) << 1));
-        //can't use GRAD SRC here
         return @floatCast(self.grads.*[gi | 0] * dx + self.grads.*[gi | 1] * dy);
     }
 };
@@ -159,391 +158,433 @@ pub const Noise2 = struct {
 // If Y is vertical in world coordinates, call noise3_ImproveXZ(x, z, Y) or use noise3_XZBeforeY.
 // If Z is vertical in world coordinates, call noise3_ImproveXZ(x, y, Z).
 // For a time varied animation, call noise3_ImproveXY(x, y, T).
+pub const Noise3 = struct {
+    seed: i64,
+    grads: *[N_GRADS_3D * 4]f32,
+    allocator: std.mem.Allocator,
 
-pub fn noise3_ImproveXY(seed: i64, x: f64, y: f64, z: f64) f32 {
-    // Re-orient the cubic lattices without skewing, so Z points up the main lattice diagonal,
-    // and the planes formed by XY are moved far out of alignment with the cube faces.
-    // Orthonormal rotation. Not a skew transform.
-    const xy: f64 = x + y;
-    const s2: f64 = xy * ROTATE_3D_ORTHOGONALIZER;
-    const zz: f64 = z * ROOT3OVER3;
-    const xr: f64 = x + s2 + zz;
-    const yr: f64 = y + s2 + zz;
-    const zr: f64 = xy * -ROOT3OVER3 + zz;
+    pub fn init(seed: i64, allocator: std.mem.Allocator) !Noise3 {
+        const noise = Noise3{
+            .seed = seed,
+            .grads = try allocator.create([N_GRADS_3D * 4]f32),
+            .allocator = allocator,
+        };
 
-    // Evaluate both lattices to form a BCC lattice.
-    return noise3_UnrotatedBase(seed, xr, yr, zr);
-}
-
-// 3D OpenSimplex2 noise, with better visual isotropy in (X, Z).
-// Recommended for 3D terrain and time-varied animations.
-// The Y coordinate should always be the "different" coordinate in whatever your use case is.
-// If Y is vertical in world coordinates, call noise3_ImproveXZ(x, Y, z).
-// If Z is vertical in world coordinates, call noise3_ImproveXZ(x, Z, y) or use noise3_ImproveXY.
-// For a time varied animation, call noise3_ImproveXZ(x, T, y) or use noise3_ImproveXY.
-
-pub fn noise3_ImproveXZ(seed: i64, x: f64, y: f64, z: f64) f32 {
-    // Re-orient the cubic lattices without skewing, so Y points up the main lattice diagonal,
-    // and the planes formed by XZ are moved far out of alignment with the cube faces.
-    // Orthonormal rotation. Not a skew transform.
-    const xz: f64 = x + z;
-    const s2: f64 = xz * ROTATE_3D_ORTHOGONALIZER;
-    const yy: f64 = y * ROOT3OVER3;
-    const xr: f64 = x + s2 + yy;
-    const zr: f64 = z + s2 + yy;
-    const yr: f64 = xz * -ROOT3OVER3 + yy;
-
-    // Evaluate both lattices to form a BCC lattice.
-    return noise3_UnrotatedBase(seed, xr, yr, zr);
-}
-
-// 3D OpenSimplex2 noise, fallback rotation option
-// Use noise3_ImproveXY or noise3_ImproveXZ instead, wherever appropriate.
-// They have less diagonal bias. This function's best use is as a fallback.
-
-pub fn noise3_Fallback(seed: i64, x: f64, y: f64, z: f64) f32 {
-    // Re-orient the cubic lattices via rotation, to produce a familiar look.
-    // Orthonormal rotation. Not a skew transform.
-    const r: f64 = FALLBACK_ROTATE_3D * (x + y + z);
-    const xr: f64 = r - x;
-    const yr: f64 = r - y;
-    const zr: f64 = r - z;
-
-    // Evaluate both lattices to form a BCC lattice.
-    return noise3_UnrotatedBase(seed, xr, yr, zr);
-}
-
-// Generate overlapping cubic lattices for 3D OpenSimplex2 noise.
-
-fn noise3_UnrotatedBase(seed: i64, xr: f64, yr: f64, zr: f64) f32 {
-    // Get base points and offsets.
-    const xrb = fastRound(xr);
-    const yrb = fastRound(yr);
-    const zrb = fastRound(zr);
-    var xri: f32 = (xr - @as(f64, @floatFromInt(xrb)));
-    var yri: f32 = (yr - @as(f64, @floatFromInt(yrb)));
-    var zri: f32 = (zr - @as(f64, @floatFromInt(zrb)));
-
-    // -1 if positive, 1 if negative.
-    var xNSign: i32 = @as(i32, @floatFromInt(-1.0 - xri)) | 1;
-    var yNSign: i32 = @as(i32, @floatFromInt(-1.0 - yri)) | 1;
-    var zNSign: i32 = @as(i32, @floatFromInt(-1.0 - zri)) | 1;
-
-    // Compute absolute values, using the above as a shortcut. This was faster in my tests for some reason.
-    var ax0 = @as(f32, @floatFromInt(xNSign)) * -xri;
-    var ay0 = @as(f32, @floatFromInt(yNSign)) * -yri;
-    var az0 = @as(f32, @floatFromInt(zNSign)) * -zri;
-
-    // Prime pre-multiplication for hash.
-    var xrbp = @as(i64, @intCast(xrb)) *% PRIME_X;
-    var yrbp = @as(i64, @intCast(yrb)) *% PRIME_Y;
-    var zrbp = @as(i64, @intCast(zrb)) *% PRIME_Z;
-
-    // Loop: Pick an edge on each lattice copy.
-    var value: f32 = 0.0;
-    var a: f32 = (RSQUARED_3D - xri * xri) - (yri * yri + zri * zri);
-    for (0..2) |l| {
-        // Closest point on cube.
-        if (a > 0.0) {
-            value += (a * a) * (a * a) * grad3(seed, xrbp, yrbp, zrbp, xri, yri, zri);
+        for (0..N_GRADS_3D * 4) |i| {
+            const grad_index = i % GRAD3_SRC.len;
+            noise.grads.*[i] = @floatCast(GRAD3_SRC[grad_index] / NORMALIZER_3D);
         }
 
-        // Second-closest point.
-        if (ax0 >= ay0 and ax0 >= az0) {
-            var b: f32 = a + ax0 + ax0;
-            if (b > 1.0) {
-                b -= 1.0;
-                value += (b * b) * (b * b) * grad3(
-                    seed,
-                    xrbp -% @as(i64, @intCast(xNSign)) *% PRIME_X,
-                    yrbp,
-                    zrbp,
-                    xri + @as(f32, @floatFromInt(xNSign)),
-                    yri,
-                    zri,
-                );
-            }
-        } else if (ay0 > ax0 and ay0 >= az0) {
-            var b: f32 = a + ay0 + ay0;
-            if (b > 1.0) {
-                b -= 1.0;
-                value += (b * b) * (b * b) * grad3(
-                    seed,
-                    xrbp,
-                    yrbp -% @as(i64, @intCast(yNSign)) *% PRIME_Y,
-                    zrbp,
-                    xri,
-                    yri + @as(f32, @floatFromInt(xNSign)),
-                    zri,
-                );
-            }
-        } else {
-            var b: f32 = a + az0 + az0;
-            if (b > 1.0) {
-                b -= 1.0;
-                value += (b * b) * (b * b) * grad3(
-                    seed,
-                    xrbp,
-                    yrbp,
-                    zrbp -% @as(i64, @intCast(zNSign)) *% PRIME_Z,
-                    xri,
-                    yri,
-                    zri + @as(f32, @floatFromInt(xNSign)),
-                );
-            }
-        }
-
-        // Break from loop if we're done, skipping updates below.
-        if (l == 1) {
-            break;
-        }
-
-        // Update absolute value.
-        ax0 = 0.5 - ax0;
-        ay0 = 0.5 - ay0;
-        az0 = 0.5 - az0;
-
-        // Update relative coordinate.
-        xri = @as(f32, @floatFromInt(xNSign)) * ax0;
-        yri = @as(f32, @floatFromInt(yNSign)) * ay0;
-        zri = @as(f32, @floatFromInt(zNSign)) * az0;
-
-        // Update falloff.
-        a += (0.75 - ax0) - (ay0 + az0);
-
-        // Update prime for hash.
-        xrbp += (@as(i64, @intCast(xNSign)) >> 1) & PRIME_X;
-        yrbp += (@as(f32, @intCast(yNSign)) >> 1) & PRIME_Y;
-        zrbp += (@as(f32, @intCast(zNSign)) >> 1) & PRIME_Z;
-
-        // Update the reverse sign indicators.
-        xNSign = -xNSign;
-        yNSign = -yNSign;
-        zNSign = -zNSign;
-
-        // And finally update the seed for the other lattice copy.
-        seed ^= SEED_FLIP_3D;
+        return noise;
     }
 
-    return value;
-}
+    pub fn deInit(self: *const Noise3) void {
+        self.allocator.destroy(self.grads);
+    }
+
+    pub fn improveXY(self: *const Noise3, x: f64, y: f64, z: f64) f32 {
+        // Re-orient the cubic lattices without skewing, so Z points up the main lattice diagonal,
+        // and the planes formed by XY are moved far out of alignment with the cube faces.
+        // Orthonormal rotation. Not a skew transform.
+        const xy: f64 = x + y;
+        const s2: f64 = xy * ROTATE_3D_ORTHOGONALIZER;
+        const zz: f64 = z * ROOT3OVER3;
+        const xr: f64 = x + s2 + zz;
+        const yr: f64 = y + s2 + zz;
+        const zr: f64 = xy * -ROOT3OVER3 + zz;
+
+        // Evaluate both lattices to form a BCC lattice.
+        return self.unrotatedBase(xr, yr, zr);
+    }
+
+    // 3D OpenSimplex2 noise, with better visual isotropy in (X, Z).
+    // Recommended for 3D terrain and time-varied animations.
+    // The Y coordinate should always be the "different" coordinate in whatever your use case is.
+    // If Y is vertical in world coordinates, call noise3_ImproveXZ(x, Y, z).
+    // If Z is vertical in world coordinates, call noise3_ImproveXZ(x, Z, y) or use noise3_ImproveXY.
+    // For a time varied animation, call noise3_ImproveXZ(x, T, y) or use noise3_ImproveXY.
+    pub fn improveXZ(self: *const Noise3, x: f64, y: f64, z: f64) f32 {
+        // Re-orient the cubic lattices without skewing, so Y points up the main lattice diagonal,
+        // and the planes formed by XZ are moved far out of alignment with the cube faces.
+        // Orthonormal rotation. Not a skew transform.
+        const xz: f64 = x + z;
+        const s2: f64 = xz * ROTATE_3D_ORTHOGONALIZER;
+        const yy: f64 = y * ROOT3OVER3;
+        const xr: f64 = x + s2 + yy;
+        const zr: f64 = z + s2 + yy;
+        const yr: f64 = xz * -ROOT3OVER3 + yy;
+
+        // Evaluate both lattices to form a BCC lattice.
+        return self.unrotatedBase(xr, yr, zr);
+    }
+
+    // 3D OpenSimplex2 noise, fallback rotation option
+    // Use noise3_ImproveXY or noise3_ImproveXZ instead, wherever appropriate.
+    // They have less diagonal bias. This function's best use is as a fallback.
+    pub fn fallback(self: *const Noise3, x: f64, y: f64, z: f64) f32 {
+        // Re-orient the cubic lattices via rotation, to produce a familiar look.
+        // Orthonormal rotation. Not a skew transform.
+        const r: f64 = FALLBACK_ROTATE_3D * (x + y + z);
+        const xr: f64 = r - x;
+        const yr: f64 = r - y;
+        const zr: f64 = r - z;
+
+        // Evaluate both lattices to form a BCC lattice.
+        return self.unrotatedBase(xr, yr, zr);
+    }
+
+    // Generate overlapping cubic lattices for 3D OpenSimplex2 noise.
+    fn unrotatedBase(self: *const Noise3, xr: f64, yr: f64, zr: f64) f32 {
+        var seed: i64 = self.seed;
+        // Get base points and offsets.
+        const xrb = fastRound(xr);
+        const yrb = fastRound(yr);
+        const zrb = fastRound(zr);
+        var xri: f32 = @floatCast(xr - @as(f64, @floatFromInt(xrb)));
+        var yri: f32 = @floatCast(yr - @as(f64, @floatFromInt(yrb)));
+        var zri: f32 = @floatCast(zr - @as(f64, @floatFromInt(zrb)));
+
+        // -1 if positive, 1 if negative.
+        var xNSign: i32 = @as(i32, @intFromFloat(-1.0 - xri)) | 1;
+        var yNSign: i32 = @as(i32, @intFromFloat(-1.0 - yri)) | 1;
+        var zNSign: i32 = @as(i32, @intFromFloat(-1.0 - zri)) | 1;
+
+        // Compute absolute values, using the above as a shortcut. This was faster in my tests for some reason.
+        var ax0 = @as(f32, @floatFromInt(xNSign)) * -xri;
+        var ay0 = @as(f32, @floatFromInt(yNSign)) * -yri;
+        var az0 = @as(f32, @floatFromInt(zNSign)) * -zri;
+
+        // Prime pre-multiplication for hash.
+        var xrbp = @as(i64, @intCast(xrb)) *% PRIME_X;
+        var yrbp = @as(i64, @intCast(yrb)) *% PRIME_Y;
+        var zrbp = @as(i64, @intCast(zrb)) *% PRIME_Z;
+
+        // Loop: Pick an edge on each lattice copy.
+        var value: f32 = 0.0;
+        var a: f32 = (RSQUARED_3D - xri * xri) - (yri * yri + zri * zri);
+        for (0..2) |l| {
+            // Closest point on cube.
+            if (a > 0.0) {
+                value += (a * a) * (a * a) * self.grad3(seed, xrbp, yrbp, zrbp, xri, yri, zri);
+            }
+
+            // Second-closest point.
+            if (ax0 >= ay0 and ax0 >= az0) {
+                var b: f32 = a + ax0 + ax0;
+                if (b > 1.0) {
+                    b -= 1.0;
+                    value += (b * b) * (b * b) * self.grad3(
+                        seed,
+                        xrbp -% @as(i64, @intCast(xNSign)) *% PRIME_X,
+                        yrbp,
+                        zrbp,
+                        xri + @as(f32, @floatFromInt(xNSign)),
+                        yri,
+                        zri,
+                    );
+                }
+            } else if (ay0 > ax0 and ay0 >= az0) {
+                var b: f32 = a + ay0 + ay0;
+                if (b > 1.0) {
+                    b -= 1.0;
+                    value += (b * b) * (b * b) * self.grad3(
+                        seed,
+                        xrbp,
+                        yrbp -% @as(i64, @intCast(yNSign)) *% PRIME_Y,
+                        zrbp,
+                        xri,
+                        yri + @as(f32, @floatFromInt(xNSign)),
+                        zri,
+                    );
+                }
+            } else {
+                var b: f32 = a + az0 + az0;
+                if (b > 1.0) {
+                    b -= 1.0;
+                    value += (b * b) * (b * b) * self.grad3(
+                        seed,
+                        xrbp,
+                        yrbp,
+                        zrbp -% @as(i64, @intCast(zNSign)) *% PRIME_Z,
+                        xri,
+                        yri,
+                        zri + @as(f32, @floatFromInt(xNSign)),
+                    );
+                }
+            }
+
+            // Break from loop if we're done, skipping updates below.
+            if (l == 1) {
+                break;
+            }
+
+            // Update absolute value.
+            ax0 = 0.5 - ax0;
+            ay0 = 0.5 - ay0;
+            az0 = 0.5 - az0;
+
+            // Update relative coordinate.
+            xri = @as(f32, @floatFromInt(xNSign)) * ax0;
+            yri = @as(f32, @floatFromInt(yNSign)) * ay0;
+            zri = @as(f32, @floatFromInt(zNSign)) * az0;
+
+            // Update falloff.
+            a += (0.75 - ax0) - (ay0 + az0);
+
+            // Update prime for hash.
+            xrbp += (@as(i64, @intCast(xNSign)) >> 1) & PRIME_X;
+            yrbp += (@as(i64, @intCast(yNSign)) >> 1) & PRIME_Y;
+            zrbp += (@as(i64, @intCast(zNSign)) >> 1) & PRIME_Z;
+
+            // Update the reverse sign indicators.
+            xNSign = -xNSign;
+            yNSign = -yNSign;
+            zNSign = -zNSign;
+
+            // And finally update the seed for the other lattice copy.
+            seed ^= SEED_FLIP_3D;
+        }
+
+        return value;
+    }
+
+    fn grad3(
+        self: *const Noise3,
+        seed: i64,
+        xrvp: i64,
+        yrvp: i64,
+        zrvp: i64,
+        dx: f32,
+        dy: f32,
+        dz: f32,
+    ) f32 {
+        var hash: i64 = (seed ^ xrvp) ^ (yrvp ^ zrvp);
+        hash *%= HASH_MULTIPLIER;
+        hash ^= hash >> (64 - N_GRADS_3D_EXPONENT + 2);
+        const gi: usize = @intCast(hash & ((@as(i64, @intCast(N_GRADS_3D)) - 1) << 2));
+        return @floatCast(self.grads[gi | 0] * dx + self.grads[gi | 1] * dy + self.grads[gi | 2] * dz);
+    }
+};
 
 // 4D OpenSimplex2 noise, with XYZ oriented like noise3_ImproveXY
 // and W for an extra degree of freedom. W repeats eventually.
 // Recommended for time-varied animations which texture a 3D object (W=time)
 // in a space where Z is vertical
+pub const Noise4 = struct {
+    seed: i64,
+    grads: *[N_GRADS_4D * 4]f32,
+    allocator: std.mem.Allocator,
 
-pub fn noise4_ImproveXYZ_ImproveXY(seed: i64, x: f64, y: f64, z: f64, w: f64) f32 {
-    const xy = x + y;
-    const s2 = xy * -0.21132486540518699998;
-    const zz = z * 0.28867513459481294226;
-    const ww = w * 0.2236067977499788;
-    const xr = x + (zz + ww + s2);
-    const yr = y + (zz + ww + s2);
-    const zr = xy * -0.57735026918962599998 + (zz + ww);
-    const wr = z * -0.866025403784439 + ww;
+    pub fn init(seed: i64, allocator: std.mem.Allocator) !Noise4 {
+        const noise = Noise4{
+            .seed = seed,
+            .grads = try allocator.create([N_GRADS_4D * 4]f32),
+            .allocator = allocator,
+        };
 
-    return noise4_UnskewedBase(seed, xr, yr, zr, wr);
-}
-
-// 4D OpenSimplex2 noise, with XYZ oriented like noise3_ImproveXZ
-// and W for an extra degree of freedom. W repeats eventually.
-// Recommended for time-varied animations which texture a 3D object (W=time)
-// in a space where Y is vertical
-
-pub fn noise4_ImproveXYZ_ImproveXZ(seed: i64, x: f64, y: f64, z: f64, w: f64) f32 {
-    const xz = x + z;
-    const s2 = xz * -0.21132486540518699998;
-    const yy = y * 0.28867513459481294226;
-    const ww = w * 0.2236067977499788;
-    const xr = x + (yy + ww + s2);
-    const zr = z + (yy + ww + s2);
-    const yr = xz * -0.57735026918962599998 + (yy + ww);
-    const wr = y * -0.866025403784439 + ww;
-
-    return noise4_UnskewedBase(seed, xr, yr, zr, wr);
-}
-
-// 4D OpenSimplex2 noise, with XYZ oriented like noise3_Fallback
-// and W for an extra degree of freedom. W repeats eventually.
-// Recommended for time-varied animations which texture a 3D object (W=time)
-// where there isn't a clear distinction between horizontal and vertical
-
-pub fn noise4_ImproveXYZ(seed: i64, x: f64, y: f64, z: f64, w: f64) f32 {
-    const xyz = x + y + z;
-    const ww = w * 0.2236067977499788;
-    const s2 = xyz * -0.16666666666666666 + ww;
-    const xs = x + s2;
-    const ys = y + s2;
-    const zs = z + s2;
-    const ws = -0.5 * xyz + ww;
-
-    return noise4_UnskewedBase(seed, xs, ys, zs, ws);
-}
-
-// 4D OpenSimplex2 noise, with XY and ZW forming orthogonal triangular-based planes.
-// Recommended for 3D terrain, where X and Y (or Z and W) are horizontal.
-// Recommended for noise(x, y, sin(time), cos(time)) trick.
-
-pub fn noise4_ImproveXY_ImproveZW(seed: i64, x: f64, y: f64, z: f64, w: f64) f32 {
-    const s2 = (x + y) * -0.178275657951399372 + (z + w) * 0.215623393288842828;
-    const t2 = (z + w) * -0.403949762580207112 + (x + y) * -0.375199083010075342;
-    const xs = x + s2;
-    const ys = y + s2;
-    const zs = z + t2;
-    const ws = w + t2;
-
-    return noise4_UnskewedBase(seed, xs, ys, zs, ws);
-}
-
-// 4D OpenSimplex2 noise, fallback lattice orientation.
-
-pub fn noise4_Fallback(seed: i64, x: f64, y: f64, z: f64, w: f64) f32 {
-    // Get points for A4 lattice
-    const s = @as(f64, @floatCast(SKEW_4D)) * (x + y + z + w);
-    const xs = x + s;
-    const ys = y + s;
-    const zs = z + s;
-    const ws = w + s;
-
-    return noise4_UnskewedBase(seed, xs, ys, zs, ws);
-}
-
-// 4D OpenSimplex2 noise base.
-
-fn noise4_UnskewedBase(seed: i64, xs: f64, ys: f64, zs: f64, ws: f64) f32 {
-    // Get base points and offsets
-    const xsb: i32 = fastFloor(xs);
-    const ysb: i32 = fastFloor(ys);
-    const zsb: i32 = fastFloor(zs);
-    const wsb: i32 = fastFloor(ws);
-    var xsi: f32 = @floatCast(xs - @as(f64, @intFromFloat(xsb)));
-    var ysi: f32 = @floatCast(xs - @as(f64, @intFromFloat(ysb)));
-    var zsi: f32 = @floatCast(xs - @as(f64, @intFromFloat(zsb)));
-    var wsi: f32 = @floatCast(xs - @as(f64, @intFromFloat(wsb)));
-
-    // Determine which lattice we can be confident has a contributing point its corresponding cell's base simplex.
-    // We only look at the spaces between the diagonal planes. This proved effective in all of my tests.
-    const siSum: f32 = (xsi + ysi) + (zsi + wsi);
-    const startingLattice: i32 = @intFromFloat(siSum * 1.25);
-
-    // Offset for seed based on first lattice copy.
-    seed += @as(i64, @intCast(startingLattice)) *% SEED_OFFSET_4D;
-
-    // Offset for lattice point relative positions (skewed)
-    const startingLatticeOffset: f32 = @as(f32, @intFromFloat(startingLattice)) * -LATTICE_STEP_4D;
-    xsi += startingLatticeOffset;
-    ysi += startingLatticeOffset;
-    zsi += startingLatticeOffset;
-    wsi += startingLatticeOffset;
-
-    // Prep for vertex contributions.
-    var ssi: f32 = (siSum + startingLatticeOffset * 4.0) * UNSKEW_4D;
-
-    // Prime pre-multiplication for hash.
-    var xsvp: i64 = @as(i64, @intCast(xsb)) *% PRIME_X;
-    var ysvp: i64 = @as(i64, @intCast(ysb)) *% PRIME_Y;
-    var zsvp: i64 = @as(i64, @intCast(zsb)) *% PRIME_Z;
-    var wsvp: i64 = @as(i64, @intCast(wsb)) *% PRIME_W;
-
-    // Five points to add, total, from five copies of the A4 lattice.
-    var value = 0.0;
-    for (0..5) |i| {
-        // Next point is the closest vertex on the 4-simplex whose base vertex is the aforementioned vertex.
-        const score0: f32 = 1.0 + ssi * (-1.0 / UNSKEW_4D); // Seems slightly faster than 1.0-xsi-ysi-zsi-wsi
-        if (xsi >= ysi and xsi >= zsi and xsi >= wsi and xsi >= score0) {
-            xsvp += PRIME_X;
-            xsi -= 1.0;
-            ssi -= UNSKEW_4D;
-        } else if (ysi > xsi and ysi >= zsi and ysi >= wsi and ysi >= score0) {
-            ysvp += PRIME_Y;
-            ysi -= 1.0;
-            ssi -= UNSKEW_4D;
-        } else if (zsi > xsi and zsi > ysi and zsi >= wsi and zsi >= score0) {
-            zsvp += PRIME_Z;
-            zsi -= 1.0;
-            ssi -= UNSKEW_4D;
-        } else if (wsi > xsi and wsi > ysi and wsi > zsi and wsi >= score0) {
-            wsvp += PRIME_W;
-            wsi -= 1.0;
-            ssi -= UNSKEW_4D;
+        for (0..N_GRADS_4D * 4) |i| {
+            const grad_index = i % GRAD4_SRC.len;
+            noise.grads.*[i] = @floatCast(GRAD4_SRC[grad_index] / NORMALIZER_4D);
         }
 
-        // gradient contribution with falloff.
-        const dx: f32 = xsi + ssi;
-        const dy: f32 = ysi + ssi;
-        const dz: f32 = zsi + ssi;
-        const dw: f32 = wsi + ssi;
-        var a: f32 = (dx * dx + dy * dy) + (dz * dz + dw * dw);
-        if (a < RSQUARED_4D) {
-            a -= RSQUARED_4D;
-            a *= a;
-            value += a * a * grad4(seed, xsvp, ysvp, zsvp, wsvp, dx, dy, dz, dw);
-        }
-
-        // Break from loop if we're done, skipping updates below.
-        if (i == 4) {
-            break;
-        }
-
-        // Update for next lattice copy shifted down by <-0.2, -0.2, -0.2, -0.2>.
-        xsi += LATTICE_STEP_4D;
-        ysi += LATTICE_STEP_4D;
-        zsi += LATTICE_STEP_4D;
-        wsi += LATTICE_STEP_4D;
-        ssi += LATTICE_STEP_4D * 4.0 * UNSKEW_4D;
-        seed -= SEED_OFFSET_4D;
-
-        // Because we don't always start on the same lattice copy, there's a special reset case.
-        if (i == startingLattice) {
-            xsvp -= PRIME_X;
-            ysvp -= PRIME_Y;
-            zsvp -= PRIME_Z;
-            wsvp -= PRIME_W;
-            seed += SEED_OFFSET_4D * 5;
-        }
+        return noise;
     }
 
-    return value;
-}
+    pub fn deInit(self: *const Noise4) void {
+        self.allocator.destroy(self.grads);
+    }
 
-// Utility
+    pub fn improveXYZXY(self: *const Noise4, x: f64, y: f64, z: f64, w: f64) f32 {
+        const xy = x + y;
+        const s2 = xy * -0.21132486540518699998;
+        const zz = z * 0.28867513459481294226;
+        const ww = w * 0.2236067977499788;
+        const xr = x + (zz + ww + s2);
+        const yr = y + (zz + ww + s2);
+        const zr = xy * -0.57735026918962599998 + (zz + ww);
+        const wr = z * -0.866025403784439 + ww;
 
-fn grad3(
-    seed: i64,
-    xrvp: i64,
-    yrvp: i64,
-    zrvp: i64,
-    dx: f32,
-    dy: f32,
-    dz: f32,
-) f32 {
-    var hash: i64 = (seed ^ xrvp) ^ (yrvp ^ zrvp);
-    hash *%= HASH_MULTIPLIER;
-    hash ^= hash >> (64 - N_GRADS_3D_EXPONENT + 2);
-    const gi: usize = @intCast(@as(i32, @intCast(hash)) & ((N_GRADS_3D - 1) << 2));
-    //can't use GRAD SRC here
-    return @floatCast(GRAD3_SRC[gi | 0] * dx + GRAD3_SRC[gi | 1] * dy + GRAD3_SRC[gi | 2] * dz);
-}
+        return self.unskewedBase(xr, yr, zr, wr);
+    }
 
-fn grad4(
-    seed: i64,
-    xsvp: i64,
-    ysvp: i64,
-    zsvp: i64,
-    wsvp: i64,
-    dx: f32,
-    dy: f32,
-    dz: f32,
-    dw: f32,
-) f32 {
-    var hash: i64 = seed ^ (xsvp ^ ysvp) ^ (zsvp ^ wsvp);
-    hash *%= HASH_MULTIPLIER;
-    hash ^= hash >> (64 - N_GRADS_4D_EXPONENT + 2);
-    const gi: usize = @intCast(@as(i32, @intCast(hash)) & ((N_GRADS_4D - 1) << 2));
-    //can't use GRAD SRC here
-    return @floatCast((GRAD4_SRC[gi | 0] * dx + GRAD4_SRC[gi | 1] * dy) + (GRAD4_SRC[gi | 2] * dz + GRAD4_SRC[gi | 3] * dw));
-}
+    // 4D OpenSimplex2 noise, with XYZ oriented like noise3_ImproveXZ
+    // and W for an extra degree of freedom. W repeats eventually.
+    // Recommended for time-varied animations which texture a 3D object (W=time)
+    // in a space where Y is vertical
+    pub fn improveXYZXZ(self: *const Noise4, x: f64, y: f64, z: f64, w: f64) f32 {
+        const xz = x + z;
+        const s2 = xz * -0.21132486540518699998;
+        const yy = y * 0.28867513459481294226;
+        const ww = w * 0.2236067977499788;
+        const xr = x + (yy + ww + s2);
+        const zr = z + (yy + ww + s2);
+        const yr = xz * -0.57735026918962599998 + (yy + ww);
+        const wr = y * -0.866025403784439 + ww;
+
+        return self.unskewedBase(xr, yr, zr, wr);
+    }
+
+    // 4D OpenSimplex2 noise, with XYZ oriented like noise3_Fallback
+    // and W for an extra degree of freedom. W repeats eventually.
+    // Recommended for time-varied animations which texture a 3D object (W=time)
+    // where there isn't a clear distinction between horizontal and vertical
+    pub fn improveXYZ(self: *const Noise4, x: f64, y: f64, z: f64, w: f64) f32 {
+        const xyz = x + y + z;
+        const ww = w * 0.2236067977499788;
+        const s2 = xyz * -0.16666666666666666 + ww;
+        const xs = x + s2;
+        const ys = y + s2;
+        const zs = z + s2;
+        const ws = -0.5 * xyz + ww;
+
+        return self.unskewedBase(xs, ys, zs, ws);
+    }
+
+    // 4D OpenSimplex2 noise, with XY and ZW forming orthogonal triangular-based planes.
+    // Recommended for 3D terrain, where X and Y (or Z and W) are horizontal.
+    // Recommended for noise(x, y, sin(time), cos(time)) trick.
+    pub fn improveXYZW(self: *const Noise4, x: f64, y: f64, z: f64, w: f64) f32 {
+        const s2 = (x + y) * -0.178275657951399372 + (z + w) * 0.215623393288842828;
+        const t2 = (z + w) * -0.403949762580207112 + (x + y) * -0.375199083010075342;
+        const xs = x + s2;
+        const ys = y + s2;
+        const zs = z + t2;
+        const ws = w + t2;
+
+        return self.unskewedBase(xs, ys, zs, ws);
+    }
+
+    // 4D OpenSimplex2 noise, fallback lattice orientation.
+
+    pub fn fallback(self: *const Noise4, x: f64, y: f64, z: f64, w: f64) f32 {
+        // Get points for A4 lattice
+        const s = @as(f64, @floatCast(SKEW_4D)) * (x + y + z + w);
+        const xs = x + s;
+        const ys = y + s;
+        const zs = z + s;
+        const ws = w + s;
+
+        return self.unskewedBase(xs, ys, zs, ws);
+    }
+
+    // 4D OpenSimplex2 noise base.
+    fn unskewedBase(self: *const Noise4, xs: f64, ys: f64, zs: f64, ws: f64) f32 {
+        var seed = self.seed;
+
+        // Get base points and offsets
+        const xsb: i32 = fastFloor(xs);
+        const ysb: i32 = fastFloor(ys);
+        const zsb: i32 = fastFloor(zs);
+        const wsb: i32 = fastFloor(ws);
+        var xsi: f32 = @floatCast(xs - @as(f64, @floatFromInt(xsb)));
+        var ysi: f32 = @floatCast(xs - @as(f64, @floatFromInt(ysb)));
+        var zsi: f32 = @floatCast(xs - @as(f64, @floatFromInt(zsb)));
+        var wsi: f32 = @floatCast(xs - @as(f64, @floatFromInt(wsb)));
+
+        // Determine which lattice we can be confident has a contributing point its corresponding cell's base simplex.
+        // We only look at the spaces between the diagonal planes. This proved effective in all of my tests.
+        const siSum: f32 = (xsi + ysi) + (zsi + wsi);
+        const startingLattice: i32 = @intFromFloat(siSum * 1.25);
+
+        // Offset for seed based on first lattice copy.
+        seed += @as(i64, @intCast(startingLattice)) *% SEED_OFFSET_4D;
+
+        // Offset for lattice point relative positions (skewed)
+        const startingLatticeOffset: f32 = @as(f32, @floatFromInt(startingLattice)) * -LATTICE_STEP_4D;
+        xsi += startingLatticeOffset;
+        ysi += startingLatticeOffset;
+        zsi += startingLatticeOffset;
+        wsi += startingLatticeOffset;
+
+        // Prep for vertex contributions.
+        var ssi: f32 = (siSum + startingLatticeOffset * 4.0) * UNSKEW_4D;
+
+        // Prime pre-multiplication for hash.
+        var xsvp: i64 = @as(i64, @intCast(xsb)) *% PRIME_X;
+        var ysvp: i64 = @as(i64, @intCast(ysb)) *% PRIME_Y;
+        var zsvp: i64 = @as(i64, @intCast(zsb)) *% PRIME_Z;
+        var wsvp: i64 = @as(i64, @intCast(wsb)) *% PRIME_W;
+
+        // Five points to add, total, from five copies of the A4 lattice.
+        var value: f32 = 0.0;
+        for (0..5) |i| {
+            // Next point is the closest vertex on the 4-simplex whose base vertex is the aforementioned vertex.
+            const score0: f32 = 1.0 + ssi * (-1.0 / UNSKEW_4D); // Seems slightly faster than 1.0-xsi-ysi-zsi-wsi
+            if (xsi >= ysi and xsi >= zsi and xsi >= wsi and xsi >= score0) {
+                xsvp +%= PRIME_X;
+                xsi -= 1.0;
+                ssi -= UNSKEW_4D;
+            } else if (ysi > xsi and ysi >= zsi and ysi >= wsi and ysi >= score0) {
+                ysvp +%= PRIME_Y;
+                ysi -= 1.0;
+                ssi -= UNSKEW_4D;
+            } else if (zsi > xsi and zsi > ysi and zsi >= wsi and zsi >= score0) {
+                zsvp +%= PRIME_Z;
+                zsi -= 1.0;
+                ssi -= UNSKEW_4D;
+            } else if (wsi > xsi and wsi > ysi and wsi > zsi and wsi >= score0) {
+                wsvp +%= PRIME_W;
+                wsi -= 1.0;
+                ssi -= UNSKEW_4D;
+            }
+
+            // gradient contribution with falloff.
+            const dx: f32 = xsi + ssi;
+            const dy: f32 = ysi + ssi;
+            const dz: f32 = zsi + ssi;
+            const dw: f32 = wsi + ssi;
+            var a: f32 = (dx * dx + dy * dy) + (dz * dz + dw * dw);
+            if (a < RSQUARED_4D) {
+                a -= RSQUARED_4D;
+                a *= a;
+                value += a * a * self.grad4(seed, xsvp, ysvp, zsvp, wsvp, dx, dy, dz, dw);
+            }
+
+            // Break from loop if we're done, skipping updates below.
+            if (i == 4) {
+                break;
+            }
+
+            // Update for next lattice copy shifted down by <-0.2, -0.2, -0.2, -0.2>.
+            xsi += LATTICE_STEP_4D;
+            ysi += LATTICE_STEP_4D;
+            zsi += LATTICE_STEP_4D;
+            wsi += LATTICE_STEP_4D;
+            ssi += LATTICE_STEP_4D * 4.0 * UNSKEW_4D;
+            seed -= SEED_OFFSET_4D;
+
+            // Because we don't always start on the same lattice copy, there's a special reset case.
+            if (i == startingLattice) {
+                xsvp -= PRIME_X;
+                ysvp -= PRIME_Y;
+                zsvp -= PRIME_Z;
+                wsvp -= PRIME_W;
+                seed += SEED_OFFSET_4D * 5;
+            }
+        }
+
+        return value;
+    }
+
+    fn grad4(
+        self: *const Noise4,
+        seed: i64,
+        xsvp: i64,
+        ysvp: i64,
+        zsvp: i64,
+        wsvp: i64,
+        dx: f32,
+        dy: f32,
+        dz: f32,
+        dw: f32,
+    ) f32 {
+        var hash: i64 = seed ^ (xsvp ^ ysvp) ^ (zsvp ^ wsvp);
+        hash *%= HASH_MULTIPLIER;
+        hash ^= hash >> (64 - N_GRADS_4D_EXPONENT + 2);
+        const gi: usize = @intCast(hash & ((@as(i64, @intCast(N_GRADS_4D)) - 1) << 2));
+        return @floatCast((self.grads[gi | 0] * dx + self.grads[gi | 1] * dy) + (self.grads[gi | 2] * dz + self.grads[gi | 3] * dw));
+    }
+};
 
 fn fastFloor(x: f64) i32 {
     const xi: i32 = @intFromFloat(x);
@@ -556,9 +597,9 @@ fn fastFloor(x: f64) i32 {
 
 fn fastRound(x: f64) i32 {
     if (x < 0.0) {
-        return @floatFromInt(x - 0.5);
+        return @intFromFloat(x - 0.5);
     } else {
-        return @floatFromInt(x + 0.5);
+        return @intFromFloat(x + 0.5);
     }
 }
 
@@ -613,7 +654,7 @@ const GRAD2_SRC: [48]f64 = .{
     0.99144486137381,
 };
 
-const GRAD3_SRC: [191]f64 = .{
+const GRAD3_SRC: [192]f64 = .{
     2.22474487139,
     2.22474487139,
     -1.0,

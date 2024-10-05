@@ -1,3 +1,5 @@
+const std = @import("std");
+
 //K.jpg's OpenSimplex 2, faster variant
 const PRIME_X: i64 = 0x5205402B9270C86F;
 const PRIME_Y: i64 = 0x598CD327003817B5;
@@ -37,90 +39,119 @@ const RSQUARED_4D: f32 = 0.6;
 
 // Noise Evaluators
 
-// 2D Simplex noise, standard lattice orientation.
-pub fn noise2(seed: i64, x: f64, y: f64) f32 {
-    // Get points for A2* lattice
-    const s: f64 = SKEW_2D * (x + y);
-    const xs: f64 = x + s;
-    const ys: f64 = y + s;
+pub const Noise2 = struct {
+    seed: i64,
+    grads: *[N_GRADS_2D * 2]f64,
+    allocator: std.mem.Allocator,
 
-    return noise2_UnskewedBase(seed, xs, ys);
-}
+    pub fn init(seed: i64, allocator: std.mem.Allocator) !Noise2 {
+        const noise = Noise2{
+            .seed = seed,
+            .grads = try allocator.create([N_GRADS_2D * 2]f64),
+            .allocator = allocator,
+        };
 
-// 2D Simplex noise, with Y pointing down the main diagonal.
-// Might be better for a 2D sandbox style game, where Y is vertical.
-// Probably slightly less optimal for heightmaps or continent maps,
-// unless your map is centered around an equator. It's a subtle
-// difference, but the option is here to make it an easy choice.
-
-pub fn noise2_ImproveX(seed: i64, x: f64, y: f64) f32 {
-    // Skew transform and rotation baked into one.
-    const xx: f64 = x * ROOT2OVER2;
-    const yy: f64 = y * (ROOT2OVER2 * (1.0 + 2.0 * SKEW_2D));
-
-    return noise2_UnskewedBase(seed, yy + xx, yy - xx);
-}
-
-// 2D Simplex noise base.
-
-fn noise2_UnskewedBase(seed: i64, xs: f64, ys: f64) f32 {
-    //all seed operitaions can overflow
-
-    // Get base points and offsets.
-    const xsb: i32 = fastFloor(xs);
-    const ysb: i32 = fastFloor(ys);
-    const xi: f32 = @as(f32, @floatCast(xs - @as(f64, @floatFromInt(xsb))));
-    const yi: f32 = @as(f32, @floatCast(ys - @as(f64, @floatFromInt(ysb))));
-
-    // Prime pre-multiplication for hash.
-    const xsbp: i64 = @as(i64, @intCast(xsb)) *% PRIME_X;
-    const ysbp: i64 = @as(i64, @intCast(ysb)) *% PRIME_X;
-
-    // Unskew.
-    const t: f32 = @floatCast((xi + yi) * UNSKEW_2D);
-    const dx0: f32 = xi + t;
-    const dy0: f32 = yi + t;
-
-    // First vertex.
-    var value: f32 = 0.0;
-    const a0: f32 = RSQUARED_2D - dx0 * dx0 - dy0 * dy0;
-    if (a0 > 0.0) {
-        value = (a0 * a0) * (a0 * a0) * grad2(seed, xsbp, ysbp, dx0, dy0);
-    }
-
-    // Second vertex.
-    const a1 = @as(f32, @floatCast(2.0 * (1.0 + 2.0 * UNSKEW_2D) * (1.0 / UNSKEW_2D + 2.0))) * t + @as(f32, @floatCast((-2.0 * (1.0 + 2.0 * UNSKEW_2D) * (1.0 + 2.0 * UNSKEW_2D)))) + a0;
-    if (a1 > 0.0) {
-        const dx1 = dx0 - @as(f32, @floatCast((1.0 + 2.0 * UNSKEW_2D)));
-        const dy1 = dy0 - @as(f32, @floatCast((1.0 + 2.0 * UNSKEW_2D)));
-        value += (a1 * a1) * (a1 * a1) * grad2(
-            seed,
-            xsbp +% PRIME_X,
-            ysbp +% PRIME_Y,
-            dx1,
-            dy1,
-        );
-    }
-
-    // Third vertex.
-    if (dy0 > dx0) {
-        const dx2: f32 = dx0 - @as(f32, @floatCast(UNSKEW_2D));
-        const dy2: f32 = dy0 - @as(f32, @floatCast(UNSKEW_2D + 1.0));
-        const a2: f32 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
-        if (a2 > 0.0) {
-            value += (a2 * a2) * (a2 * a2) * grad2(seed, xsbp, ysbp +% PRIME_Y, dx2, dy2);
+        for (0..noise.grads.*.len) |i| {
+            const grad_index = i % GRAD2_SRC.len;
+            noise.grads.*[i] = GRAD2_SRC[grad_index] / NORMALIZER_2D;
         }
-    } else {
-        const dx2: f32 = dx0 - @as(f32, @floatCast(UNSKEW_2D + 1.0));
-        const dy2: f32 = dy0 - @as(f32, @floatCast(UNSKEW_2D));
-        const a2: f32 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
-        if (a2 > 0.0) {
-            value += (a2 * a2) * (a2 * a2) * grad2(seed, xsbp + PRIME_Y, ysbp, dx2, dy2);
-        }
+
+        return noise;
     }
 
-    return value;
-}
+    pub fn deInit(self: *const Noise2) void {
+        self.allocator.destroy(self.grads);
+    }
+
+    // 2D Simplex noise, standard lattice orientation.
+    pub fn get(self: *const Noise2, x: f64, y: f64) f32 {
+        // Get points for A2* lattice
+        const s: f64 = SKEW_2D * (x + y);
+        const xs: f64 = x + s;
+        const ys: f64 = y + s;
+
+        return self.getUnskewedBase(xs, ys);
+    }
+
+    // 2D Simplex noise, with Y pointing down the main diagonal.
+    // Might be better for a 2D sandbox style game, where Y is vertical.
+    // Probably slightly less optimal for heightmaps or continent maps,
+    // unless your map is centered around an equator. It's a subtle
+    // difference, but the option is here to make it an easy choice.
+    pub fn getImproveX(self: *const Noise2, x: f64, y: f64) f32 {
+        // Skew transform and rotation baked into one.
+        const xx: f64 = x * ROOT2OVER2;
+        const yy: f64 = y * (ROOT2OVER2 * (1.0 + 2.0 * SKEW_2D));
+
+        return self.getUnskewedBase(yy + xx, yy - xx);
+    }
+
+    // 2D Simplex noise base.
+    pub fn getUnskewedBase(self: *const Noise2, xs: f64, ys: f64) f32 {
+        // Get base points and offsets.
+        const xsb: i32 = fastFloor(xs);
+        const ysb: i32 = fastFloor(ys);
+        const xi: f32 = @as(f32, @floatCast(xs - @as(f64, @floatFromInt(xsb))));
+        const yi: f32 = @as(f32, @floatCast(ys - @as(f64, @floatFromInt(ysb))));
+
+        // Prime pre-multiplication for hash.
+        const xsbp: i64 = @as(i64, @intCast(xsb)) *% PRIME_X;
+        const ysbp: i64 = @as(i64, @intCast(ysb)) *% PRIME_X;
+
+        // Unskew.
+        const t: f32 = @floatCast((xi + yi) * UNSKEW_2D);
+        const dx0: f32 = xi + t;
+        const dy0: f32 = yi + t;
+
+        // First vertex.
+        var value: f32 = 0.0;
+        const a0: f32 = RSQUARED_2D - dx0 * dx0 - dy0 * dy0;
+        if (a0 > 0.0) {
+            value = (a0 * a0) * (a0 * a0) * self.grad2(xsbp, ysbp, dx0, dy0);
+        }
+
+        // Second vertex.
+        const a1 = @as(f32, @floatCast(2.0 * (1.0 + 2.0 * UNSKEW_2D) * (1.0 / UNSKEW_2D + 2.0))) * t + @as(f32, @floatCast((-2.0 * (1.0 + 2.0 * UNSKEW_2D) * (1.0 + 2.0 * UNSKEW_2D)))) + a0;
+        if (a1 > 0.0) {
+            const dx1 = dx0 - @as(f32, @floatCast((1.0 + 2.0 * UNSKEW_2D)));
+            const dy1 = dy0 - @as(f32, @floatCast((1.0 + 2.0 * UNSKEW_2D)));
+            value += (a1 * a1) * (a1 * a1) * self.grad2(
+                xsbp +% PRIME_X,
+                ysbp +% PRIME_Y,
+                dx1,
+                dy1,
+            );
+        }
+
+        // Third vertex.
+        if (dy0 > dx0) {
+            const dx2: f32 = dx0 - @as(f32, @floatCast(UNSKEW_2D));
+            const dy2: f32 = dy0 - @as(f32, @floatCast(UNSKEW_2D + 1.0));
+            const a2: f32 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
+            if (a2 > 0.0) {
+                value += (a2 * a2) * (a2 * a2) * self.grad2(xsbp, ysbp +% PRIME_Y, dx2, dy2);
+            }
+        } else {
+            const dx2: f32 = dx0 - @as(f32, @floatCast(UNSKEW_2D + 1.0));
+            const dy2: f32 = dy0 - @as(f32, @floatCast(UNSKEW_2D));
+            const a2: f32 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
+            if (a2 > 0.0) {
+                value += (a2 * a2) * (a2 * a2) * self.grad2(xsbp + PRIME_Y, ysbp, dx2, dy2);
+            }
+        }
+
+        return value;
+    }
+
+    pub fn grad2(self: *const Noise2, xsvp: i64, ysvp: i64, dx: f32, dy: f32) f32 {
+        var hash: i64 = self.seed ^ xsvp ^ ysvp;
+        hash *%= HASH_MULTIPLIER;
+        hash ^= hash >> (64 - N_GRADS_2D_EXPONENT + 1);
+        const gi: usize = @intCast((@as(i32, @truncate(hash))) & ((N_GRADS_2D - 1) << 1));
+        //can't use GRAD SRC here
+        return @floatCast(self.grads.*[gi | 0] * dx + self.grads.*[gi | 1] * dy);
+    }
+};
 
 // 3D OpenSimplex2 noise, with better visual isotropy in (X, Y).
 // Recommended for 3D terrain and time-varied animations.
@@ -477,15 +508,6 @@ fn noise4_UnskewedBase(seed: i64, xs: f64, ys: f64, zs: f64, ws: f64) f32 {
 }
 
 // Utility
-
-fn grad2(seed: i64, xsvp: i64, ysvp: i64, dx: f32, dy: f32) f32 {
-    var hash: i64 = seed ^ xsvp ^ ysvp;
-    hash *%= HASH_MULTIPLIER;
-    hash ^= hash >> (64 - N_GRADS_2D_EXPONENT + 1);
-    const gi: usize = @intCast((@as(i32, @truncate(hash))) & ((N_GRADS_2D - 1) << 1));
-    //can't use GRAD SRC here
-    return @floatCast(GRAD2_SRC[gi | 0] * dx + GRAD2_SRC[gi | 1] * dy);
-}
 
 fn grad3(
     seed: i64,

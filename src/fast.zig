@@ -41,19 +41,19 @@ const RSQUARED_4D: f32 = 0.6;
 
 pub const Noise2 = struct {
     seed: i64,
-    grads: *[N_GRADS_2D * 2]f64,
+    grads: *[N_GRADS_2D * 2]f32,
     allocator: std.mem.Allocator,
 
     pub fn init(seed: i64, allocator: std.mem.Allocator) !Noise2 {
         const noise = Noise2{
             .seed = seed,
-            .grads = try allocator.create([N_GRADS_2D * 2]f64),
+            .grads = try allocator.create([N_GRADS_2D * 2]f32),
             .allocator = allocator,
         };
 
-        for (0..noise.grads.*.len) |i| {
+        for (0..N_GRADS_2D * 2) |i| {
             const grad_index = i % GRAD2_SRC.len;
-            noise.grads.*[i] = GRAD2_SRC[grad_index] / NORMALIZER_2D;
+            noise.grads.*[i] = @floatCast(GRAD2_SRC[grad_index] / NORMALIZER_2D);
         }
 
         return noise;
@@ -96,7 +96,7 @@ pub const Noise2 = struct {
 
         // Prime pre-multiplication for hash.
         const xsbp: i64 = @as(i64, @intCast(xsb)) *% PRIME_X;
-        const ysbp: i64 = @as(i64, @intCast(ysb)) *% PRIME_X;
+        const ysbp: i64 = @as(i64, @intCast(ysb)) *% PRIME_Y;
 
         // Unskew.
         const t: f32 = @floatCast((xi + yi) * UNSKEW_2D);
@@ -136,7 +136,7 @@ pub const Noise2 = struct {
             const dy2: f32 = dy0 - @as(f32, @floatCast(UNSKEW_2D));
             const a2: f32 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
             if (a2 > 0.0) {
-                value += (a2 * a2) * (a2 * a2) * self.grad2(xsbp + PRIME_Y, ysbp, dx2, dy2);
+                value += (a2 * a2) * (a2 * a2) * self.grad2(xsbp +% PRIME_X, ysbp, dx2, dy2);
             }
         }
 
@@ -147,7 +147,7 @@ pub const Noise2 = struct {
         var hash: i64 = self.seed ^ xsvp ^ ysvp;
         hash *%= HASH_MULTIPLIER;
         hash ^= hash >> (64 - N_GRADS_2D_EXPONENT + 1);
-        const gi: usize = @intCast((@as(i32, @truncate(hash))) & ((N_GRADS_2D - 1) << 1));
+        const gi: usize = @intCast(hash & ((@as(i64, @intCast(N_GRADS_2D)) - 1) << 1));
         //can't use GRAD SRC here
         return @floatCast(self.grads.*[gi | 0] * dx + self.grads.*[gi | 1] * dy);
     }

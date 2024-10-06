@@ -320,34 +320,30 @@ pub const Noise3 = struct {
         const z0: f32 = zi + @as(f32, @floatFromInt(zNMask));
         const a0: f32 = RSQUARED_3D - x0 * x0 - y0 * y0 - z0 * z0;
 
-        var value: f32 = (a0 * a0)
-            * (a0 * a0)
-            * self.grad3(
-                self.seed,
-                xrbp +% (@as(i64, @intCast(xNMask)) & PRIME_X),
-                yrbp +% (@as(i64, @intCast(yNMask)) & PRIME_Y),
-                zrbp +% (@as(i64, @intCast(zNMask)) & PRIME_Z),
-                x0,
-                y0,
-                z0,
-            );
+        var value: f32 = (a0 * a0) * (a0 * a0) * self.grad3(
+            self.seed,
+            xrbp +% (@as(i64, @intCast(xNMask)) & PRIME_X),
+            yrbp +% (@as(i64, @intCast(yNMask)) & PRIME_Y),
+            zrbp +% (@as(i64, @intCast(zNMask)) & PRIME_Z),
+            x0,
+            y0,
+            z0,
+        );
 
         // Second vertex.
         const x1: f32 = xi - 0.5;
         const y1: f32 = yi - 0.5;
         const z1: f32 = zi - 0.5;
         const a1: f32 = RSQUARED_3D - x1 * x1 - y1 * y1 - z1 * z1;
-        value += (a1 * a1)
-            * (a1 * a1)
-            * self.grad3(
-                seed2,
-                xrbp +% PRIME_X,
-                yrbp +% PRIME_Y,
-                zrbp +% PRIME_Z,
-                x1,
-                y1,
-                z1,
-            );
+        value += (a1 * a1) * (a1 * a1) * self.grad3(
+            seed2,
+            xrbp +% PRIME_X,
+            yrbp +% PRIME_Y,
+            zrbp +% PRIME_Z,
+            x1,
+            y1,
+            z1,
+        );
 
         // Shortcuts for building the remaining falloffs.
         // Derived by subtracting the polynomials with the offsets plugged in.
@@ -364,34 +360,30 @@ pub const Noise3 = struct {
             const x2: f32 = x0 - @as(f32, @floatFromInt(xNMask | 1));
             const y2: f32 = y0;
             const z2: f32 = z0;
-            value += (a2 * a2)
-                * (a2 * a2)
-                * self.grad3(
-                    seed,
-                    xrbp +% (@as(i64, @intCast(!xNMask)) & PRIME_X),
-                    yrbp +% (@as(i64, @intCast(yNMask)) & PRIME_Y),
-                    zrbp +% (@as(i64, @intCast(zNMask)) & PRIME_Z),
-                    x2,
-                    y2,
-                    z2,
-                );
+            value += (a2 * a2) * (a2 * a2) * self.grad3(
+                seed,
+                xrbp +% (@as(i64, @intCast(!xNMask)) & PRIME_X),
+                yrbp +% (@as(i64, @intCast(yNMask)) & PRIME_Y),
+                zrbp +% (@as(i64, @intCast(zNMask)) & PRIME_Z),
+                x2,
+                y2,
+                z2,
+            );
         } else {
             const a3: f32 = yAFlipMask0 + zAFlipMask0 + a0;
             if (a3 > 0.0) {
                 const x3: f32 = x0;
                 const y3: f32 = y0 - @as(f32, @floatFromInt(yNMask | 1));
                 const z3: f32 = z0 - @as(f32, @floatFromInt(zNMask | 1));
-                value += (a3 * a3)
-                    * (a3 * a3)
-                    * self.grad3(
-                        seed,
-                        xrbp +% (@as(i64, @intCast(xNMask)) & PRIME_X),
-                        yrbp +% (@as(i64, @intCast(!yNMask)) & PRIME_Y),
-                        zrbp +% (@as(i64, @intCast(!zNMask)) & PRIME_Z),
-                        x3,
-                        y3,
-                        z3,
-                    );
+                value += (a3 * a3) * (a3 * a3) * self.grad3(
+                    seed,
+                    xrbp +% (@as(i64, @intCast(xNMask)) & PRIME_X),
+                    yrbp +% (@as(i64, @intCast(!yNMask)) & PRIME_Y),
+                    zrbp +% (@as(i64, @intCast(!zNMask)) & PRIME_Z),
+                    x3,
+                    y3,
+                    z3,
+                );
             }
 
             const a4: f32 = xAFlipMask1 + a1;
@@ -399,190 +391,171 @@ pub const Noise3 = struct {
                 const x4: f32 = @as(f32, @intFromFloat(xNMask | 1)) + x1;
                 const y4: f32 = y1;
                 const z4: f32 = z1;
-                value += (a4 * a4)
-                    * (a4 * a4)
-                    * self.grad3(
-                        seed2,
-                        xrbp +% (Wrapping(xNMask as i64) & PRIME_X << 1)),
-                        yrbp +% Wrapping(PRIME_Y),
-                        zrbp +% Wrapping(PRIME_Z),
-                        x4,
-                        y4,
-                        z4,
-                    );
+                value += (a4 * a4) * (a4 * a4) * self.grad3(
+                    seed2,
+                    xrbp +% ((@as(i64, @intCast(xNMask)) & PRIME_X << 1)),
+                    yrbp +% PRIME_Y,
+                    zrbp +% PRIME_Z,
+                    x4,
+                    y4,
+                    z4,
+                );
                 skip5 = true;
             }
         }
 
-        let mut skip9 = false;
-        let a6 = yAFlipMask0 + a0;
-        if a6 > 0.0 {
-            let x6 = x0;
-            let y6 = y0 - (yNMask | 1) as f32;
-            let z6 = z0;
-            value += (a6 * a6)
-                * (a6 * a6)
-                * grad3(
-                    seed,
-                    xrbp + (Wrapping(xNMask as i64) & Wrapping(PRIME_X)),
-                    yrbp + (Wrapping(!yNMask as i64) & Wrapping(PRIME_Y)),
-                    zrbp + (Wrapping(zNMask as i64) & Wrapping(PRIME_Z)),
-                    x6,
-                    y6,
-                    z6,
-                );
+        var skip9: bool = false;
+        const a6 = yAFlipMask0 + a0;
+        if (a6 > 0.0) {
+            const x6: f32 = x0;
+            const y6: f32 = y0 - @as(f32, @floatFromInt((yNMask | 1)));
+            const z6: f32 = z0;
+            value += (a6 * a6) * (a6 * a6) * self.grad3(
+                seed,
+                xrbp +% (@as(i64, @intCast(xNMask)) & PRIME_X),
+                yrbp +% (@as(i64, @intCast(!yNMask)) & PRIME_Y),
+                zrbp +% (@as(i64, @intCast(zNMask)) & PRIME_Z),
+                x6,
+                y6,
+                z6,
+            );
         } else {
-            let a7 = xAFlipMask0 + zAFlipMask0 + a0;
-            if a7 > 0.0 {
-                let x7 = x0 - (xNMask | 1) as f32;
-                let y7 = y0;
-                let z7 = z0 - (zNMask | 1) as f32;
-                value += (a7 * a7)
-                    * (a7 * a7)
-                    * grad3(
-                        seed,
-                        xrbp + (Wrapping(!xNMask as i64) & Wrapping(PRIME_X)),
-                        yrbp + (Wrapping(yNMask as i64) & Wrapping(PRIME_Y)),
-                        zrbp + (Wrapping(!zNMask as i64) & Wrapping(PRIME_Z)),
-                        x7,
-                        y7,
-                        z7,
-                    );
+            var a7: f32 = xAFlipMask0 + zAFlipMask0 + a0;
+            if (a7 > 0.0) {
+                const x7 = x0 - @as(f32, @floatFromInt((xNMask | 1)));
+                const y7 = y0;
+                const z7 = z0 - @as(f32, @floatFromInt((zNMask | 1)));
+                value += (a7 * a7) * (a7 * a7) * grad3(
+                    seed,
+                    xrbp +% (@as(i64, @intCast(!xNMask)) & PRIME_X),
+                    yrbp +% (@as(i64, @intCast(yNMask)) & PRIME_Y),
+                    zrbp +% (@as(i64, @intCast(!zNMask)) & PRIME_Z),
+                    x7,
+                    y7,
+                    z7,
+                );
             }
 
-            let a8 = yAFlipMask1 + a1;
-            if a8 > 0.0 {
-                let x8 = x1;
-                let y8 = (yNMask | 1) as f32 + y1;
-                let z8 = z1;
-                value += (a8 * a8)
-                    * (a8 * a8)
-                    * grad3(
-                        seed2,
-                        xrbp + Wrapping(PRIME_X),
-                        yrbp + (Wrapping(yNMask as i64) & (Wrapping(PRIME_Y) << 1)),
-                        zrbp + Wrapping(PRIME_Z),
-                        x8,
-                        y8,
-                        z8,
-                    );
+            const a8: f32 = yAFlipMask1 + a1;
+            if (a8 > 0.0) {
+                const x8 = x1;
+                const y8 = y1 + @as(f32, @floatFromInt((yNMask | 1)));
+                const z8 = z1;
+                value += (a8 * a8) * (a8 * a8) * self.grad3(
+                    seed2,
+                    xrbp +% PRIME_X,
+                    yrbp +% (@as(i64, @intCast(yNMask)) & (PRIME_Y << 1)),
+                    zrbp +% PRIME_Z,
+                    x8,
+                    y8,
+                    z8,
+                );
+
                 skip9 = true;
             }
         }
 
-        let mut skipD = false;
-        let aA = zAFlipMask0 + a0;
-        if aA > 0.0 {
-            let xA = x0;
-            let yA = y0;
-            let zA = z0 - (zNMask | 1) as f32;
-            value += (aA * aA)
-                * (aA * aA)
-                * grad3(
-                    seed,
-                    xrbp + (Wrapping(xNMask as i64) & Wrapping(PRIME_X)),
-                    yrbp + (Wrapping(yNMask as i64) & Wrapping(PRIME_Y)),
-                    zrbp + (Wrapping(!zNMask as i64) & Wrapping(PRIME_Z)),
-                    xA,
-                    yA,
-                    zA,
-                );
+        var skipD: bool = false;
+        const aA: f32 = zAFlipMask0 + a0;
+        if (aA > 0.0) {
+            const xA: f32 = x0;
+            const yA: f32 = y0;
+            const zA: f32 = z0 - @as(f32, @floatFromInt((zNMask | 1)));
+            value += (aA * aA) * (aA * aA) * self.grad3(
+                seed,
+                xrbp +% (@as(i64, @intCast(xNMask)) & PRIME_X),
+                yrbp +% (@as(i64, @intCast(yNMask)) & PRIME_Y),
+                zrbp +% (@as(i64, @intCast(!zNMask)) & PRIME_Z),
+                xA,
+                yA,
+                zA,
+            );
         } else {
-            let aB = xAFlipMask0 + yAFlipMask0 + a0;
-            if aB > 0.0 {
-                let xB = x0 - (xNMask | 1) as f32;
-                let yB = y0 - (yNMask | 1) as f32;
-                let zB = z0;
-                value += (aB * aB)
-                    * (aB * aB)
-                    * grad3(
-                        seed,
-                        xrbp + (Wrapping(!xNMask as i64) & Wrapping(PRIME_X)),
-                        yrbp + (Wrapping(!yNMask as i64) & Wrapping(PRIME_Y)),
-                        zrbp + (Wrapping(zNMask as i64) & Wrapping(PRIME_Z)),
-                        xB,
-                        yB,
-                        zB,
-                    );
+            const aB = xAFlipMask0 + yAFlipMask0 + a0;
+            if (aB > 0.0) {
+                const xB: f32 = x0 - @as(f32, @floatFromInt((xNMask | 1)));
+                const yB: f32 = y0 - @as(f32, @floatFromInt((yNMask | 1)));
+                const zB: f32 = z0;
+                value += (aB * aB) * (aB * aB) * self.grad3(
+                    seed,
+                    xrbp +% (@as(i64, @intCast(!xNMask)) & PRIME_X),
+                    yrbp +% (@as(i64, @intCast(!yNMask)) & PRIME_Y),
+                    zrbp +% (@as(i64, @intCast(zNMask)) & PRIME_Z),
+                    xB,
+                    yB,
+                    zB,
+                );
             }
 
-            let aC = zAFlipMask1 + a1;
-            if aC > 0.0 {
-                let xC = x1;
-                let yC = y1;
-                let zC = (zNMask | 1) as f32 + z1;
-                value += (aC * aC)
-                    * (aC * aC)
-                    * grad3(
-                        seed2,
-                        xrbp + Wrapping(PRIME_X),
-                        yrbp + Wrapping(PRIME_Y),
-                        zrbp + (Wrapping(zNMask as i64) & (Wrapping(PRIME_Z) << 1)),
-                        xC,
-                        yC,
-                        zC,
-                    );
+            const aC: f32 = zAFlipMask1 + a1;
+            if (aC > 0.0) {
+                const xC: f32 = x1;
+                const yC: f32 = y1;
+                const zC: f32 = z1 + @as(f32, @floatFromInt((zNMask | 1)));
+                value += (aC * aC) * (aC * aC) * self.grad3(
+                    seed2,
+                    xrbp +% PRIME_X,
+                    yrbp +% PRIME_Y,
+                    zrbp +% (@as(i64, @intCast(zNMask)) & (PRIME_Z << 1)),
+                    xC,
+                    yC,
+                    zC,
+                );
                 skipD = true;
             }
         }
 
-        if !skip5 {
-            let a5 = yAFlipMask1 + zAFlipMask1 + a1;
-            if a5 > 0.0 {
-                let x5 = x1;
-                let y5 = (yNMask | 1) as f32 + y1;
-                let z5 = (zNMask | 1) as f32 + z1;
-                value += (a5 * a5)
-                    * (a5 * a5)
-                    * grad3(
-                        seed2,
-                        xrbp + Wrapping(PRIME_X),
-                        yrbp + (Wrapping(yNMask as i64) & (Wrapping(PRIME_Y) << 1)),
-                        zrbp + (Wrapping(zNMask as i64) & (Wrapping(PRIME_Z) << 1)),
-                        x5,
-                        y5,
-                        z5,
-                    );
+        if (!skip5) {
+            const a5: f32 = yAFlipMask1 + zAFlipMask1 + a1;
+            if (a5 > 0.0) {
+                const x5: f32 = x1;
+                const y5: f32 = y1 + @as(f32, @floatFromInt((yNMask | 1)));
+                const z5: f32 = z1 + @as(f32, @floatFromInt((zNMask | 1)));
+                value += (a5 * a5) * (a5 * a5) * self.grad3(
+                    seed2,
+                    xrbp +% PRIME_X,
+                    yrbp +% (@as(i64, @intCast(yNMask)) & (PRIME_Y << 1)),
+                    zrbp +% (@as(i64, @intCast(zNMask)) & (PRIME_Z << 1)),
+                    x5,
+                    y5,
+                    z5,
+                );
             }
         }
 
-        if !skip9 {
-            let a9 = xAFlipMask1 + zAFlipMask1 + a1;
-            if a9 > 0.0 {
-                let x9 = (xNMask | 1) as f32 + x1;
-                let y9 = y1;
-                let z9 = (zNMask | 1) as f32 + z1;
-                value += (a9 * a9)
-                    * (a9 * a9)
-                    * grad3(
-                        seed2,
-                        xrbp + (Wrapping(xNMask as i64) & (Wrapping(PRIME_X) << 1)),
-                        yrbp + Wrapping(PRIME_Y),
-                        zrbp + (Wrapping(zNMask as i64) & (Wrapping(PRIME_Z) << 1)),
-                        x9,
-                        y9,
-                        z9,
-                    );
+        if (!skip9) {
+            const a9: f32 = xAFlipMask1 + zAFlipMask1 + a1;
+            if (a9 > 0.0) {
+                const x9: f32 = x1 + @as(f32, @floatFromInt((xNMask | 1)));
+                const y9: f32 = y1;
+                const z9: f32 = z1 + @as(f32, @floatFromInt((zNMask | 1)));
+                value += (a9 * a9) * (a9 * a9) * self.grad3(
+                    seed2,
+                    xrbp +% (@as(i64, @intCast(xNMask)) & (PRIME_X << 1)),
+                    yrbp +% PRIME_Y,
+                    zrbp +% (@as(i64, @intCast(zNMask)) & (PRIME_Z << 1)),
+                    x9,
+                    y9,
+                    z9,
+                );
             }
         }
 
-        if !skipD {
-            let aD = xAFlipMask1 + yAFlipMask1 + a1;
-            if aD > 0.0 {
-                let xD = (xNMask | 1) as f32 + x1;
-                let yD = (yNMask | 1) as f32 + y1;
-                let zD = z1;
-                value += (aD * aD)
-                    * (aD * aD)
-                    * grad3(
-                        seed2,
-                        xrbp + (Wrapping(xNMask as i64) & (Wrapping(PRIME_X) << 1)),
-                        yrbp + (Wrapping(yNMask as i64) & (Wrapping(PRIME_Y) << 1)),
-                        zrbp + Wrapping(PRIME_Z),
-                        xD,
-                        yD,
-                        zD,
-                    );
+        if (!skipD) {
+            const aD: f32 = xAFlipMask1 + yAFlipMask1 + a1;
+            if (aD > 0.0) {
+                const xD: f32 = x1 + @as(f32, @floatFromInt((xNMask | 1)));
+                const yD: f32 = y1 + @as(f32, @floatFromInt((yNMask | 1)));
+                const zD: f32 = z1;
+                value += (aD * aD) * (aD * aD) * self.grad3(
+                    seed2,
+                    xrbp +% (@as(i64, @intCast(yNMask)) & (PRIME_Y << 1)),
+                    yrbp +% (@as(i64, @intCast(yNMask)) & (PRIME_Y << 1)),
+                    zrbp +% PRIME_Z,
+                    xD,
+                    yD,
+                    zD,
+                );
             }
         }
 

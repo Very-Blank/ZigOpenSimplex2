@@ -332,9 +332,9 @@ pub const Noise3 = struct {
             a += (0.75 - ax0) - (ay0 + az0);
 
             // Update prime for hash.
-            xrbp += (@as(i64, @intCast(xNSign)) >> 1) & PRIME_X;
-            yrbp += (@as(i64, @intCast(yNSign)) >> 1) & PRIME_Y;
-            zrbp += (@as(i64, @intCast(zNSign)) >> 1) & PRIME_Z;
+            xrbp +%= (@as(i64, @intCast(xNSign)) >> 1) & PRIME_X;
+            yrbp +%= (@as(i64, @intCast(yNSign)) >> 1) & PRIME_Y;
+            zrbp +%= (@as(i64, @intCast(zNSign)) >> 1) & PRIME_Z;
 
             // Update the reverse sign indicators.
             xNSign = -xNSign;

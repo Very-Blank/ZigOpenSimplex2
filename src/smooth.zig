@@ -124,7 +124,7 @@ pub const Noise2 = struct {
                 const a2: f32 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
                 if (a2 > 0.0) {
                     value += (a2 * a2) * (a2 * a2) * self.grad2(
-                        xsbp +% PRIME_X << 1,
+                        xsbp +% (PRIME_X << 1),
                         ysbp +% PRIME_Y,
                         dx2,
                         dy2,
@@ -132,7 +132,7 @@ pub const Noise2 = struct {
                 }
             } else {
                 const dx2: f32 = dx0 - @as(f32, @floatCast(UNSKEW_2D));
-                const dy2: f32 = dy0 - @as(f32, @floatCast(UNSKEW_2D));
+                const dy2: f32 = dy0 - @as(f32, @floatCast(UNSKEW_2D + 1.0));
                 const a2: f32 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
                 if (a2 > 0.0) {
                     value +=
@@ -147,7 +147,7 @@ pub const Noise2 = struct {
                 if (a3 > 0.0) {
                     value += (a3 * a3) * (a3 * a3) * self.grad2(
                         xsbp +% PRIME_X,
-                        ysbp +% PRIME_Y << 1,
+                        ysbp +% (PRIME_Y << 1),
                         dx3,
                         dy3,
                     );

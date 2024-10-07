@@ -293,7 +293,7 @@ pub const Noise3 = struct {
                         yrbp -% @as(i64, @intCast(yNSign)) *% PRIME_Y,
                         zrbp,
                         xri,
-                        yri + @as(f32, @floatFromInt(xNSign)),
+                        yri + @as(f32, @floatFromInt(yNSign)),
                         zri,
                     );
                 }
@@ -308,7 +308,7 @@ pub const Noise3 = struct {
                         zrbp -% @as(i64, @intCast(zNSign)) *% PRIME_Z,
                         xri,
                         yri,
-                        zri + @as(f32, @floatFromInt(xNSign)),
+                        zri + @as(f32, @floatFromInt(zNSign)),
                     );
                 }
             }

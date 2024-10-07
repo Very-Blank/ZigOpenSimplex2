@@ -1,2 +1,2 @@
-const fast = @import("fast.zig");
-const smooth = @import("smooth.zig");
+pub const fast = @import("fast.zig");
+pub const smooth = @import("smooth.zig");

@@ -1,5 +1,6 @@
 # OpenSimplex 2
-A Zig translation of: [OpenSimplex2]([(https://github.com/KdotJPG/OpenSimplex2))
+A Zig translation of: <a href="https://github.com/KdotJPG/OpenSimplex2">OpenSimplex2</a>
+
 There are some bugs in the code that I have made when translating the code.
 
 Successors to OpenSimplex Noise, plus updated OpenSimplex. Includes 2D, 3D, and 4D noise.

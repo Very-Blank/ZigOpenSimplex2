@@ -551,15 +551,15 @@ pub const Noise4 = struct {
             zsi += LATTICE_STEP_4D;
             wsi += LATTICE_STEP_4D;
             ssi += LATTICE_STEP_4D * 4.0 * UNSKEW_4D;
-            seed -= SEED_OFFSET_4D;
+            seed -%= SEED_OFFSET_4D;
 
             // Because we don't always start on the same lattice copy, there's a special reset case.
             if (i == startingLattice) {
-                xsvp -= PRIME_X;
-                ysvp -= PRIME_Y;
-                zsvp -= PRIME_Z;
-                wsvp -= PRIME_W;
-                seed += SEED_OFFSET_4D * 5;
+                xsvp -%= PRIME_X;
+                ysvp -%= PRIME_Y;
+                zsvp -%= PRIME_Z;
+                wsvp -%= PRIME_W;
+                seed +%= SEED_OFFSET_4D * 5;
             }
         }
 

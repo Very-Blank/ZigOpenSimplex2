@@ -120,7 +120,7 @@ pub const Noise2 = struct {
         if (t < @as(f32, @floatCast(UNSKEW_2D))) {
             if (xi + xmyi > 1.0) {
                 const dx2: f32 = dx0 - @as(f32, @floatCast((3.0 * UNSKEW_2D + 2.0)));
-                const dy2: f32 = dy0 - @as(f32, @floatCast((3.0 * UNSKEW_2D + 2.0)));
+                const dy2: f32 = dy0 - @as(f32, @floatCast((3.0 * UNSKEW_2D + 1.0)));
                 const a2: f32 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
                 if (a2 > 0.0) {
                     value += (a2 * a2) * (a2 * a2) * self.grad2(

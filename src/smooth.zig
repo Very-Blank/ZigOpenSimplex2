@@ -349,6 +349,7 @@ pub const Noise3 = struct {
         const xAFlipMask0: f32 = @as(f32, @floatFromInt(((xNMask | 1) << 1))) * x1;
         const yAFlipMask0: f32 = @as(f32, @floatFromInt(((yNMask | 1) << 1))) * y1;
         const zAFlipMask0: f32 = @as(f32, @floatFromInt(((zNMask | 1) << 1))) * z1;
+
         const xAFlipMask1: f32 = @as(f32, @floatFromInt((-2 - (xNMask << 2)))) * x1 - 1.0;
         const yAFlipMask1: f32 = @as(f32, @floatFromInt((-2 - (yNMask << 2)))) * y1 - 1.0;
         const zAFlipMask1: f32 = @as(f32, @floatFromInt((-2 - (zNMask << 2)))) * z1 - 1.0;
@@ -387,12 +388,12 @@ pub const Noise3 = struct {
 
             const a4: f32 = xAFlipMask1 + a1;
             if (a4 > 0.0) {
-                const x4: f32 = @as(f32, @floatFromInt(xNMask | 1)) + x1;
+                const x4: f32 = x1 + @as(f32, @floatFromInt(xNMask | 1));
                 const y4: f32 = y1;
                 const z4: f32 = z1;
                 value += (a4 * a4) * (a4 * a4) * self.grad3(
                     seed2,
-                    xrbp +% ((@as(i64, @intCast(xNMask)) & PRIME_X << 1)),
+                    xrbp +% ((@as(i64, @intCast(xNMask)) & (PRIME_X << 1))),
                     yrbp +% PRIME_Y,
                     zrbp +% PRIME_Z,
                     x4,
@@ -548,7 +549,7 @@ pub const Noise3 = struct {
                 const zD: f32 = z1;
                 value += (aD * aD) * (aD * aD) * self.grad3(
                     seed2,
-                    xrbp +% (@as(i64, @intCast(yNMask)) & (PRIME_Y << 1)),
+                    xrbp +% (@as(i64, @intCast(xNMask)) & (PRIME_X << 1)),
                     yrbp +% (@as(i64, @intCast(yNMask)) & (PRIME_Y << 1)),
                     zrbp +% PRIME_Z,
                     xD,

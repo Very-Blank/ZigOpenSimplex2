@@ -477,9 +477,9 @@ pub const Noise4 = struct {
         const zsb: i32 = fastFloor(zs);
         const wsb: i32 = fastFloor(ws);
         var xsi: f32 = @floatCast(xs - @as(f64, @floatFromInt(xsb)));
-        var ysi: f32 = @floatCast(xs - @as(f64, @floatFromInt(ysb)));
-        var zsi: f32 = @floatCast(xs - @as(f64, @floatFromInt(zsb)));
-        var wsi: f32 = @floatCast(xs - @as(f64, @floatFromInt(wsb)));
+        var ysi: f32 = @floatCast(ys - @as(f64, @floatFromInt(ysb)));
+        var zsi: f32 = @floatCast(zs - @as(f64, @floatFromInt(zsb)));
+        var wsi: f32 = @floatCast(ws - @as(f64, @floatFromInt(wsb)));
 
         // Determine which lattice we can be confident has a contributing point its corresponding cell's base simplex.
         // We only look at the spaces between the diagonal planes. This proved effective in all of my tests.

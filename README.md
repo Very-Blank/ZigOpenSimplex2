@@ -1,7 +1,7 @@
 # OpenSimplex 2
 A Zig translation of: <a href="https://github.com/KdotJPG/OpenSimplex2">OpenSimplex2</a>
 
-Fast version should now be completely translation error free. As for the smooth version some mistakes are still in the 3D and 4D noise.
+Fast version should now be completely translation error free. As for the smooth version there are some mistakes still in the 3D and 4D noise base functions.
 
 Successors to OpenSimplex Noise, plus updated OpenSimplex. Includes 2D, 3D, and 4D noise.
 
